@@ -39,7 +39,8 @@ function Draft() {
   const draft = (drafts[building] || []).filter((l) => rowsById[l.itemId]);
   const lines = draft.map((l) => {
     const it = rowsById[l.itemId];
-    return { ...l, it, qty: l.qty ?? suggestQty(it) };
+    // ราคาตั้งต้น = ราคา/หน่วย จาก Genedia (แก้ได้)
+    return { ...l, it, qty: l.qty ?? suggestQty(it), price: l.price ?? (it.v.price ? Math.round(it.v.price * 100) / 100 : null) };
   });
   const groups = [...new Set(lines.map((l) => l.it.group || 'ไม่ระบุ Group'))].sort();
   const total = lines.reduce((s, l) => s + (l.price ? l.qty * l.price : 0), 0);
@@ -80,7 +81,7 @@ function Draft() {
   }
   return (
     <>
-      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ (แก้ได้) · ราคา/หน่วย กรอกเอง · ไม่รวม VAT</p>
+      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ · ราคา/หน่วย ตั้งต้นจาก Genedia (ช่องว่าง = Genedia ไม่มีราคา) · แก้ได้ทั้งสองช่อง · ไม่รวม VAT</p>
       <div className="table-wrap">
         <table className="table po-table">
           <thead>
