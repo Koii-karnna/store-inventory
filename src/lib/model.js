@@ -13,7 +13,8 @@ export const itemId = (building, code) => `${building}_${code}`;
 
 /**
  * ค่าที่แสดงในเว็บ
- * - ชื่อ/สถานะ/หน่วย: ช่วงเปลี่ยนผ่านแสดงตาม Master (ตั้งค่าได้) ไม่งั้นตาม Genedia
+ * - ชื่อ/หน่วย: ช่วงเปลี่ยนผ่านแสดงตาม Master (ตั้งค่าได้) ไม่งั้นตาม Genedia
+ * - สถานะ: ยกเลิกที่ใดที่หนึ่ง (Genedia หรือ Master) = ยกเลิก ไม่แจ้งเตือนและไม่ให้สั่งซื้อ
  * - คงเหลือ/Min/Max/ราคา: ตาม Genedia เสมอ
  * - Group/หมวดย่อย/ยี่ห้อ: เก็บในเว็บ
  */
@@ -22,7 +23,7 @@ export function view(item, settings = DEFAULT_SETTINGS) {
   const useM = settings.preferMaster && m;
   return {
     name: (useM && m.name) || g?.name || m?.name || '',
-    active: useM ? m.active : g ? g.active : !!m?.active,
+    active: (g ? g.active : true) && (m ? m.active : true),
     unit: (useM && m.unit) || g?.unit || m?.unit || '',
     stock: g?.stock ?? null,
     min: g?.min ?? null,

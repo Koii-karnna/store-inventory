@@ -12,7 +12,7 @@ export default function Settings() {
     if (!(nearPct >= 0 && nearPct <= 200)) throw new Error('% ใกล้ Min ต้องอยู่ระหว่าง 0–200');
     const next = { preferMaster: !!form.preferMaster, nearPct };
     const changes = [
-      settings.preferMaster !== next.preferMaster && { field: 'แสดงชื่อ/สถานะ/หน่วยตาม Master', from: settings.preferMaster, to: next.preferMaster },
+      settings.preferMaster !== next.preferMaster && { field: 'แสดงชื่อ/หน่วยตาม Master', from: settings.preferMaster, to: next.preferMaster },
       settings.nearPct !== next.nearPct && { field: '% ใกล้ Min', from: settings.nearPct, to: next.nearPct },
     ].filter(Boolean);
     if (!changes.length) return toast('ไม่มีการเปลี่ยนแปลง');
@@ -27,11 +27,11 @@ export default function Settings() {
         <h2>ช่วงเปลี่ยนผ่าน (IT กำลังแก้ Genedia)</h2>
         <label className="inline">
           <input type="checkbox" checked={!!form.preferMaster} onChange={(e) => setForm({ ...form, preferMaster: e.target.checked })} />
-          แสดง <b>ชื่อ / สถานะ / หน่วยนับ</b> ตาม Master
+          แสดง <b>ชื่อ / หน่วยนับ</b> ตาม Master
         </label>
         <p className="muted small">
           เปิดไว้ระหว่างที่ IT ยังแก้ Genedia ไม่เสร็จ — เมื่อหน้า "ไม่ตรง Master" เหลือน้อยหรือหมดแล้ว ให้ปิด เว็บจะแสดงตาม Genedia ทั้งหมด
-          (คงเหลือ / Min / Max แสดงตาม Genedia เสมอ)
+          (คงเหลือ / Min / Max แสดงตาม Genedia เสมอ · สถานะ: ยกเลิกใน Genedia หรือ Master อย่างใดอย่างหนึ่ง = ยกเลิก)
         </p>
       </section>
       <section className="card">
