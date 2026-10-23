@@ -70,7 +70,13 @@ function LoginScreen() {
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    getDoc(doc(db, 'config', 'bootstrap')).then((s) => setHasAdmin(s.exists())).catch(() => setHasAdmin(true));
+    getDoc(doc(db, 'config', 'bootstrap')).then((s) => setHasAdmin(s.exists())).catch((x) => {
+      console.error(x);
+      setHasAdmin(true);
+      setErr(x?.code === 'permission-denied'
+        ? 'ยังไม่ได้ตั้งกติกา Firestore (Rules) — วางไฟล์ firestore.rules ใน Firebase Console ตาม README ก่อน'
+        : errorText(x));
+    });
   }, []);
 
   const login = async (e) => {

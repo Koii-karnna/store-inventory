@@ -7,9 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:parse": "node scripts/test-parse.mjs",
-    "deploy": "vite build && firebase deploy",
-    "deploy:rules": "firebase deploy --only firestore"
+    "test:parse": "node scripts/test-parse.mjs"
   },
   "dependencies": {
     "exceljs": "4.4.0",
@@ -20,7 +18,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "6.1.2",
-    "firebase-tools": "15.34.1",
     "vite": "8.3.5"
   }
 }

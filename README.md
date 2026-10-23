@@ -2,8 +2,8 @@
 
 เว็บแอปสำหรับดูคลังอะไหล่จากระบบ Genedia มี Dashboard, แจ้งเตือนเมื่อใกล้ Min, เพิ่มรูป/ยี่ห้อ/Vendor, ทำใบขอสั่งซื้อ (Excel มีรูป) และเก็บ Log ผู้แก้ไข
 
-- **โค้ด**: GitHub (repo นี้)
-- **ข้อมูล / Login / เว็บ**: Firebase (Firestore + Authentication + Hosting) ใช้แผนฟรี (Spark) ได้
+- **เว็บ**: https://koii-karnna.github.io/store-inventory/ (GitHub Pages — อัปเดตอัตโนมัติทุกครั้งที่ Push)
+- **ข้อมูล / Login**: Firebase โปรเจกต์ `set-store-inventory` (Firestore + Authentication) แผนฟรี (Spark)
 
 ---
 
@@ -34,33 +34,32 @@
 
 ## ติดตั้งครั้งแรก (ทำครั้งเดียว)
 
-### 1. ตั้งค่า Firebase Console (https://console.firebase.google.com)
+### 1. Firebase Console (https://console.firebase.google.com → โปรเจกต์ set-store-inventory)
 
-1. เลือกโปรเจกต์ → **Build → Authentication → Get started → Sign-in method → Email/Password → Enable**
-2. **Build → Firestore Database → Create database** → Location: `asia-southeast1 (Singapore)` → Production mode
-3. **⚙️ Project settings → General → Your apps → `</>` (Web)** → ตั้งชื่อ → Register → คัดลอกค่า `firebaseConfig`
-4. นำค่าไปใส่ในไฟล์ `src/firebase-config.js`
+1. **Authentication → Sign-in method → Email/Password → Enable**
+2. **Authentication → Settings → Authorized domains → Add domain** → `koii-karnna.github.io`
+3. **Firestore Database → Rules** → ลบของเดิมทั้งหมด → วางเนื้อหาไฟล์ [`firestore.rules`](firestore.rules) → **Publish**
+4. **Firestore Database → Indexes → Composite → Create index** สร้าง 2 ตัว (Query scope: Collection):
+   - Collection `logs`: `itemId` Ascending, `ts` Descending
+   - Collection `imports`: `buildings` Arrays, `at` Descending
 
-### 2. ติดตั้งและ Deploy (ในโฟลเดอร์ repo นี้)
+> ถ้าแก้ไฟล์ `firestore.rules` ภายหลัง ต้องวางใหม่ในข้อ 3 อีกครั้ง (เว็บจะไม่อัปเดต Rules ให้เอง)
 
-```bash
-npm install
-npx firebase login
-npx firebase use --add
-npm run deploy
-```
+### 2. เปิด GitHub Pages (ครั้งเดียว)
 
-- `firebase login` จะเปิดเบราว์เซอร์ให้ login ด้วย Google account ที่เป็นเจ้าของโปรเจกต์ Firebase
-- `firebase use --add` เลือกโปรเจกต์ แล้วตั้งชื่อเล่นว่า `default`
-- `npm run deploy` จะ build เว็บ + ส่งกติกาความปลอดภัย (firestore.rules) + ขึ้นเว็บ ได้ URL เช่น `https://<project-id>.web.app`
+GitHub → repo `store-inventory` → **Settings → Pages → Build and deployment → Source: GitHub Actions**
 
-### 3. สร้าง Admin คนแรก
+### 3. Push โค้ด
 
-เปิด URL ของเว็บ → หน้าแรกจะให้ **สร้าง Admin คนแรก** (ทำได้ครั้งเดียว ควรทำทันทีหลัง deploy) → จากนั้นนำเข้าไฟล์ Genedia **พร้อมไฟล์ Master** ในครั้งแรก
+**GitHub Desktop** → **Push origin** → รอ 1–2 นาที (ดูความคืบหน้าที่แท็บ **Actions** ใน GitHub) → เปิด https://koii-karnna.github.io/store-inventory/
 
-### 4. ส่งโค้ดขึ้น GitHub
+### 4. สร้าง Admin คนแรก
 
-เปิด **GitHub Desktop** → เลือก repo `store-inventory` → ใส่ข้อความใน Summary → **Commit to main** → **Push origin**
+เปิดเว็บ → หน้าแรกจะให้ **สร้าง Admin คนแรก** (ทำได้ครั้งเดียว ควรทำทันที) → จากนั้นนำเข้าไฟล์ Genedia **พร้อมไฟล์ Master** ในครั้งแรก
+
+## การอัปเดตเว็บครั้งต่อไป
+
+แก้โค้ด → GitHub Desktop: **Commit to main** → **Push origin** → เว็บอัปเดตเองใน 1–2 นาที
 (ไฟล์ Excel ข้อมูลจริงถูกตั้งไว้ไม่ให้ขึ้น GitHub แล้วใน `.gitignore`)
 
 ---
@@ -68,14 +67,14 @@ npm run deploy
 ## สำหรับผู้พัฒนา
 
 ```bash
+npm install
 npm run dev
 npm run test:parse
-npm run deploy:rules
 ```
 
 - `npm run dev` — เปิดเว็บในเครื่องที่ http://localhost:5173
 - `npm run test:parse` — ทดสอบการอ่านไฟล์ Genedia/Master จริงจากโฟลเดอร์ `../../Store Part list`
-- `npm run deploy:rules` — ส่งเฉพาะกติกาความปลอดภัยและ index
+- Deploy: `.github/workflows/deploy.yml` build และขึ้น GitHub Pages ทุกครั้งที่ push เข้า `main`
 
 โครงสร้างหลัก:
 
@@ -86,7 +85,8 @@ src/lib/model.js       ค่าที่แสดง, ระดับแจ้�
 src/lib/excel.js       สร้าง Excel ใบขอซื้อ (มีรูป) / รายการแก้ Genedia
 src/lib/db.js          เขียน Firestore พร้อม Log
 src/pages/*            หน้าจอต่างๆ
-firestore.rules        สิทธิ์การเข้าถึงข้อมูล
+firestore.rules        สิทธิ์การเข้าถึงข้อมูล (วางใน Firebase Console เอง)
+firestore.indexes.json index ที่ต้องสร้าง (อ้างอิง)
 ```
 
 ข้อมูลใน Firestore: `items` (รายการ), `images` (รูปขนาดเต็ม), `vendors`, `pos` (ใบขอซื้อ), `imports`, `logs`, `users`, `config` (Group/หมวดย่อย/ยี่ห้อ), `settings`
