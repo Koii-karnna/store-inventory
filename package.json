@@ -1,0 +1,26 @@
+{
+  "name": "store-inventory",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:parse": "node scripts/test-parse.mjs",
+    "deploy": "vite build && firebase deploy",
+    "deploy:rules": "firebase deploy --only firestore"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "firebase": "13.1.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.1.2",
+    "firebase-tools": "15.34.1",
+    "vite": "8.3.5"
+  }
+}

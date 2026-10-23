@@ -1,0 +1,47 @@
+rules_version = '2';
+
+// สิทธิ์การเข้าถึงข้อมูล
+// - ต้อง login และมีบัญชีใน users ที่ active เท่านั้นจึงอ่านได้
+// - admin เท่านั้นที่เขียนได้
+// - log เพิ่มได้อย่างเดียว ลบหรือแก้ไม่ได้
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function bootstrapPath() { return /databases/$(database)/documents/config/bootstrap; }
+    function isUser() { return signedIn() && exists(userPath()) && get(userPath()).data.active == true; }
+    function isAdmin() { return isUser() && get(userPath()).data.role == 'admin'; }
+
+    match /users/{uid} {
+      allow read: if isUser() || (signedIn() && request.auth.uid == uid);
+      // Admin คนแรก: สร้างตัวเองได้ครั้งเดียว ตอนที่ยังไม่มี config/bootstrap
+      allow create: if isAdmin()
+        || (signedIn() && request.auth.uid == uid
+            && !exists(bootstrapPath()) && existsAfter(bootstrapPath())
+            && request.resource.data.role == 'admin' && request.resource.data.active == true);
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /config/bootstrap {
+      allow read: if true;
+      allow create: if signedIn() && !exists(bootstrapPath())
+        && getAfter(userPath()).data.role == 'admin';
+      allow update, delete: if false;
+    }
+
+    match /logs/{id} {
+      allow read: if isUser();
+      allow create: if isAdmin() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /{coll}/{id} {
+      allow read: if isUser()
+        && coll in ['items', 'images', 'vendors', 'pos', 'imports', 'config', 'settings'];
+      allow write: if isAdmin()
+        && coll in ['items', 'images', 'vendors', 'pos', 'imports', 'config', 'settings']
+        && !(coll == 'config' && id == 'bootstrap');
+    }
+  }
+}

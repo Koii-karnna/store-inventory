@@ -1,0 +1,126 @@
+// กติกาของข้อมูล: ค่าที่แสดง, ระดับแจ้งเตือน, ความไม่ตรงกับ Master
+export const DEFAULT_SETTINGS = { preferMaster: true, nearPct: 20 };
+
+/** หมวดย่อยของรายการ: CMC = GG-SSS หรือ 3661, NP ไม่มีหมวดย่อย */
+export function subFromCode(building, code) {
+  if (building !== 'CMC') return null;
+  if (/^3661-/.test(code)) return '3661';
+  const m = /^(\d{2}-\d{3})-/.exec(code);
+  return m ? m[1] : null;
+}
+
+export const itemId = (building, code) => `${building}_${code}`;
+
+/**
+ * ค่าที่แสดงในเว็บ
+ * - ชื่อ/สถานะ/หน่วย: ช่วงเปลี่ยนผ่านแสดงตาม Master (ตั้งค่าได้) ไม่งั้นตาม Genedia
+ * - คงเหลือ/Min/Max/ราคา: ตาม Genedia เสมอ
+ * - Group/หมวดย่อย/ยี่ห้อ: เก็บในเว็บ
+ */
+export function view(item, settings = DEFAULT_SETTINGS) {
+  const g = item.g, m = item.m;
+  const useM = settings.preferMaster && m;
+  return {
+    name: (useM && m.name) || g?.name || m?.name || '',
+    active: useM ? m.active : g ? g.active : !!m?.active,
+    unit: (useM && m.unit) || g?.unit || m?.unit || '',
+    stock: g?.stock ?? null,
+    min: g?.min ?? null,
+    max: g?.max ?? null,
+    price: g?.price ?? null,
+  };
+}
+
+export const LEVELS = {
+  out: { label: 'หมด', color: 'red' },
+  low: { label: 'ถึง Min', color: 'orange' },
+  near: { label: 'ใกล้ Min', color: 'yellow' },
+  ok: { label: 'ปกติ', color: 'green' },
+  nomin: { label: 'ไม่มี Min', color: 'gray' },
+  nodata: { label: 'ไม่มีใน Genedia', color: 'gray' },
+  inactive: { label: 'ยกเลิกใช้งาน', color: 'gray' },
+};
+
+/** ระดับแจ้งเตือน (Min ว่างหรือ 0 ถือว่า "ไม่มี Min") */
+export function level(item, settings = DEFAULT_SETTINGS) {
+  const v = view(item, settings);
+  if (!v.active) return 'inactive';
+  if (!item.g || item.inGenedia === false) return 'nodata';
+  if (!v.min) return 'nomin';
+  if (v.stock <= 0) return 'out';
+  if (v.stock <= v.min) return 'low';
+  if (v.stock <= v.min * (1 + (settings.nearPct ?? 20) / 100)) return 'near';
+  return 'ok';
+}
+
+/** ต้องสั่ง = หมด หรือ ถึง Min และยังไม่อยู่ระหว่างสั่ง */
+export const needsOrder = (lv, item) => (lv === 'out' || lv === 'low') && !item.ordering;
+
+/** จำนวนสั่งตั้งต้น = Max − คงเหลือ (ถ้าไม่มี Max ใช้ Min × 2 − คงเหลือ) */
+export function suggestQty(item) {
+  const g = item.g || {};
+  const stock = g.stock ?? 0;
+  const target = g.max || (g.min ? g.min * 2 : 0);
+  return Math.max(target - stock, 1);
+}
+
+const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+
+export const MISMATCH_TYPES = {
+  onlyGenedia: 'มีใน Genedia แต่ไม่มีใน Master',
+  onlyMaster: 'มีใน Master แต่ไม่มีใน Genedia',
+  name: 'ชื่อไม่ตรง',
+  status: 'สถานะไม่ตรง',
+  unit: 'หน่วยนับไม่ตรง',
+  group: 'Group ไม่ตรง',
+};
+
+/** สิ่งที่ต้องไปแก้ใน Genedia ให้ตรงกับ Master */
+export function mismatches(item) {
+  const g = item.inGenedia === false ? null : item.g, m = item.m;
+  if (g && !m) return [{ type: 'onlyGenedia', genedia: g.name, master: '' }];
+  if (m && !g) return [{ type: 'onlyMaster', genedia: '', master: m.name }];
+  if (!g || !m) return [];
+  const out = [];
+  if (clean(g.name) !== clean(m.name)) out.push({ type: 'name', genedia: g.name, master: m.name });
+  if (g.active !== m.active) out.push({ type: 'status', genedia: g.active ? 'ใช้งาน' : 'ยกเลิกใช้งาน', master: m.active ? 'ใช้งาน' : 'ยกเลิกใช้งาน' });
+  if (g.unit && m.unit && clean(g.unit) !== clean(m.unit)) out.push({ type: 'unit', genedia: g.unit, master: m.unit });
+  if (g.group && m.group && clean(g.group) !== clean(m.group)) out.push({ type: 'group', genedia: g.group, master: m.group });
+  return out;
+}
+
+/** จับคู่ชื่อ Group เก่าใน Part List Report → Group ใหม่ใน Master (ใช้เสียงข้างมากจากรายการที่มีทั้งสองที่) */
+export function buildReportGroupMap(items) {
+  const count = {};
+  for (const it of items) {
+    if (!it.g?.group || !it.m?.group) continue;
+    const k = `${it.building}|${it.g.group}`;
+    count[k] ??= {};
+    count[k][it.m.group] = (count[k][it.m.group] || 0) + 1;
+  }
+  const map = {};
+  for (const [k, c] of Object.entries(count)) map[k] = Object.entries(c).sort((a, b) => b[1] - a[1])[0][0];
+  return map;
+}
+
+/** เดา Group/หมวดย่อยของรายการใหม่ที่ไม่มีใน Master */
+export function guessGroup(building, code, reportGroup, taxonomy, reportMap) {
+  const sub = subFromCode(building, code);
+  let group = reportGroup ? reportMap[`${building}|${reportGroup}`] : null;
+  if (!group && building === 'CMC' && sub) group = taxonomy?.subs?.find((s) => s.code === sub)?.group || null;
+  if (!group && building === 'NP') {
+    const gg = code.slice(0, 2);
+    group = taxonomy?.npCodes?.find((n) => n.gg === gg)?.group || null;
+  }
+  if (!group && reportGroup && taxonomy?.groups?.[building]?.includes(reportGroup)) group = reportGroup;
+  return { group, sub };
+}
+
+export const fmtNum = (n) => (n === null || n === undefined ? '–' : Number(n).toLocaleString('th-TH', { maximumFractionDigits: 2 }));
+
+export const fmtDateTime = (ts) => {
+  const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : ts ? new Date(ts) : null;
+  return d ? d.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : '–';
+};
+
+export const fmtDateThai = (d = new Date()) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
