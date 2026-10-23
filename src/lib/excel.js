@@ -45,11 +45,36 @@ const COLS = [
 ];
 
 /**
- * ใบขอสั่งซื้อ: หัวเอกสาร + แยกหัวข้อตาม Group, ไม่รวม VAT
- * lines: [{code,name,brand,unit,stock,min,max,group,qty,price}]
- * images: { [itemId]: dataURL }
+ * จัดรายการเป็น Group → หมวดย่อย (เรียงตามรหัสหมวดย่อย)
+ * NP ไม่มีหมวดย่อย: sub = null ทั้ง Group
  */
-export async function buildPoExcel({ building, date, lines, images }) {
+export function groupLines(lines, groupOf = (l) => l.group, subOf = (l) => l.sub, codeOf = (l) => l.code) {
+  const groups = {};
+  for (const l of lines) {
+    const g = groupOf(l) || 'ไม่ระบุ Group';
+    const s = subOf(l) || '';
+    ((groups[g] ??= {})[s] ??= []).push(l);
+  }
+  const key = (s) => s || 'zz';
+  return Object.entries(groups)
+    .map(([group, subs]) => {
+      const keys = Object.keys(subs).sort((a, b) => key(a).localeCompare(key(b)));
+      const noSubs = keys.length === 1 && keys[0] === '';
+      return {
+        group,
+        first: key(keys[0]),
+        subs: keys.map((s) => ({ sub: noSubs ? null : s, items: subs[s].sort((a, b) => codeOf(a).localeCompare(codeOf(b))) })),
+      };
+    })
+    .sort((a, b) => a.first.localeCompare(b.first) || a.group.localeCompare(b.group));
+}
+
+/**
+ * ใบขอสั่งซื้อ: หัวเอกสาร + แยกหัวข้อตาม Group และหมวดย่อย, ไม่รวม VAT
+ * lines: [{code,name,brand,unit,stock,min,max,group,sub,qty,price}]
+ * images: { [itemId]: dataURL } · subNames: { [หมวดย่อย]: ชื่อ }
+ */
+export async function buildPoExcel({ building, date, lines, images, subNames }) {
   const ExcelJS = await loadExcelJS();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ใบขอสั่งซื้อ', {
@@ -80,41 +105,47 @@ export async function buildPoExcel({ building, date, lines, images }) {
   ws.views = [{ state: 'frozen', ySplit: 4 }];
   ws.pageSetup.printTitlesRow = '4:4';
 
-  const groups = [...new Set(lines.map((l) => l.group || 'ไม่ระบุ Group'))].sort();
   let r = 5, no = 1;
   const totalCells = [];
-  for (const g of groups) {
+  const header = (text, argb, size) => {
     ws.mergeCells(r, 1, r, last);
-    const gc = ws.getCell(r, 1);
-    gc.value = g;
-    gc.font = { name: FONT, size: 11, bold: true };
-    gc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } };
-    gc.border = BORDER;
+    const c = ws.getCell(r, 1);
+    c.value = text;
+    c.font = { name: FONT, size, bold: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+    c.border = BORDER;
     ws.getRow(r).height = 20;
     r++;
-    for (const l of lines.filter((x) => (x.group || 'ไม่ระบุ Group') === g)) {
-      const row = ws.getRow(r);
-      const minmax = `${l.min ?? '-'}/${l.max ?? '-'}`;
-      const vals = [no++, '', l.code, l.name, l.brand || '', l.unit || '', l.stock ?? '', minmax, l.qty || '', l.price ?? '', null];
-      vals.forEach((v, i) => { row.getCell(i + 1).value = v; });
-      row.getCell(11).value = { formula: `IF(OR(I${r}="",J${r}=""),"",I${r}*J${r})` };
-      totalCells.push(`K${r}`);
-      row.eachCell({ includeEmpty: true }, (cell, col) => {
-        cell.font = { name: FONT, size: 10 };
-        cell.border = BORDER;
-        cell.alignment = { vertical: 'middle', wrapText: col === 4, horizontal: [1, 6, 7, 8, 9].includes(col) ? 'center' : undefined };
-      });
-      row.getCell(10).numFmt = '#,##0.00';
-      row.getCell(11).numFmt = '#,##0.00';
-      row.height = 66;
-      const img = images?.[l.itemId];
-      if (img) {
-        const id = wb.addImage({ base64: img, extension: 'jpeg' });
-        const { w, h } = jpegSize(img) || { w: 1, h: 1 };
-        const s = Math.min(IMG_BOX / w, IMG_BOX / h);
-        ws.addImage(id, { tl: { col: 1.08, row: r - 1 + 0.06 }, ext: { width: Math.round(w * s), height: Math.round(h * s) }, editAs: 'oneCell' });
-      }
-      r++;
+  };
+  const writeLine = (l) => {
+    const row = ws.getRow(r);
+    const minmax = `${l.min ?? '-'}/${l.max ?? '-'}`;
+    const vals = [no++, '', l.code, l.name, l.brand || '', l.unit || '', l.stock ?? '', minmax, l.qty || '', l.price ?? '', null];
+    vals.forEach((v, i) => { row.getCell(i + 1).value = v; });
+    row.getCell(11).value = { formula: `IF(OR(I${r}="",J${r}=""),"",I${r}*J${r})` };
+    totalCells.push(`K${r}`);
+    row.eachCell({ includeEmpty: true }, (cell, col) => {
+      cell.font = { name: FONT, size: 10 };
+      cell.border = BORDER;
+      cell.alignment = { vertical: 'middle', wrapText: col === 4, horizontal: [1, 6, 7, 8, 9].includes(col) ? 'center' : undefined };
+    });
+    row.getCell(10).numFmt = '#,##0.00';
+    row.getCell(11).numFmt = '#,##0.00';
+    row.height = 66;
+    const img = images?.[l.itemId];
+    if (img) {
+      const id = wb.addImage({ base64: img, extension: 'jpeg' });
+      const { w, h } = jpegSize(img) || { w: 1, h: 1 };
+      const s = Math.min(IMG_BOX / w, IMG_BOX / h);
+      ws.addImage(id, { tl: { col: 1.08, row: r - 1 + 0.06 }, ext: { width: Math.round(w * s), height: Math.round(h * s) }, editAs: 'oneCell' });
+    }
+    r++;
+  };
+  for (const { group, subs } of groupLines(lines)) {
+    header(group, 'FFDDEBF7', 11);
+    for (const { sub, items } of subs) {
+      if (sub !== null) header(`   ${sub || '–'}  ${subNames?.[sub] || (sub ? '' : 'ไม่ระบุหมวดย่อย')}`, 'FFF2F2F2', 10);
+      items.forEach(writeLine);
     }
   }
   ws.mergeCells(r, 1, r, last - 1);

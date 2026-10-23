@@ -5,7 +5,7 @@ import { useData } from '../state.jsx';
 import { go, Thumb, Empty, Badge, AsyncButton, toast } from '../ui.jsx';
 import { suggestQty, fmtNum, fmtDateTime } from '../lib/model.js';
 import { commit, getImage } from '../lib/db.js';
-import { buildPoExcel, download } from '../lib/excel.js';
+import { buildPoExcel, download, groupLines } from '../lib/excel.js';
 
 const PO_STATUS = { ordering: ['กำลังสั่ง', 'blue'], rejected: ['ไม่อนุมัติ', 'gray'], done: ['ปิดแล้ว', 'green'] };
 
@@ -33,8 +33,14 @@ async function loadImages(itemIds) {
 
 const fileName = (building, d) => `ใบขอสั่งซื้อ_${building}_${d.toISOString().slice(0, 10)}.xlsx`;
 
+const useSubNames = () => {
+  const { taxonomy } = useData();
+  return useMemo(() => Object.fromEntries((taxonomy?.subs || []).map((s) => [s.code, s.name])), [taxonomy]);
+};
+
 function Draft() {
   const { building, drafts, setDrafts, byBuilding, isAdmin, user } = useData();
+  const subNames = useSubNames();
   const rowsById = useMemo(() => Object.fromEntries(byBuilding[building].map((r) => [r.id, r])), [byBuilding, building]);
   const draft = (drafts[building] || []).filter((l) => rowsById[l.itemId]);
   const lines = draft.map((l) => {
@@ -42,7 +48,7 @@ function Draft() {
     // ราคาตั้งต้น = ราคา/หน่วย จาก Genedia (แก้ได้)
     return { ...l, it, qty: l.qty ?? suggestQty(it), price: l.price ?? (it.v.price ? Math.round(it.v.price * 100) / 100 : null) };
   });
-  const groups = [...new Set(lines.map((l) => l.it.group || 'ไม่ระบุ Group'))].sort();
+  const sections = groupLines(lines, (l) => l.it.group, (l) => l.it.sub, (l) => l.it.code);
   const total = lines.reduce((s, l) => s + (l.price ? l.qty * l.price : 0), 0);
 
   const setLine = (itemId, patch) => setDrafts((d) => ({ ...d, [building]: d[building].map((l) => (l.itemId === itemId ? { ...l, ...patch } : l)) }));
@@ -59,7 +65,7 @@ function Draft() {
       min: it.v.min, max: it.v.max, group: it.group || '', sub: it.sub || '', qty, price: price ?? null,
     }));
     const images = await loadImages(snapshot.map((l) => l.itemId));
-    const buf = await buildPoExcel({ building, date: now, lines: snapshot, images });
+    const buf = await buildPoExcel({ building, date: now, lines: snapshot, images, subNames });
 
     const poId = doc(collection(db, 'pos')).id;
     const ops = [
@@ -90,10 +96,12 @@ function Draft() {
               <th className="num">Min/Max</th><th className="num">จำนวนสั่ง</th><th className="num">ราคา/หน่วย</th><th className="num">รวม</th><th />
             </tr>
           </thead>
-          {groups.map((g) => (
-            <tbody key={g}>
-              <tr className="group-row"><td colSpan={11}>{g}</td></tr>
-              {lines.filter((l) => (l.it.group || 'ไม่ระบุ Group') === g).map((l) => (
+          {sections.map(({ group, subs }) => (
+            <tbody key={group}>
+              <tr className="group-row"><td colSpan={11}>{group}</td></tr>
+              {subs.flatMap(({ sub, items }) => [
+                sub !== null && <tr key={`sub-${sub}`} className="sub-row"><td colSpan={11}><span className="mono">{sub || '–'}</span> {subNames[sub] || (sub ? '' : 'ไม่ระบุหมวดย่อย')}</td></tr>,
+                ...items.map((l) => (
                 <tr key={l.itemId}>
                   <td><Thumb src={l.it.thumb} /></td>
                   <td className="mono nowrap">{l.it.code}</td>
@@ -107,7 +115,8 @@ function Draft() {
                   <td className="num">{l.price ? fmtNum(l.qty * l.price) : '–'}</td>
                   <td>{isAdmin && <button className="icon-btn" onClick={() => remove(l.itemId)} aria-label="เอาออก">✕</button>}</td>
                 </tr>
-              ))}
+                )),
+              ])}
             </tbody>
           ))}
           <tfoot>
@@ -127,13 +136,14 @@ function Draft() {
 
 function History() {
   const { pos, building, byBuilding, isAdmin, user } = useData();
+  const subNames = useSubNames();
   const list = pos.filter((p) => p.building === building);
   const items = Object.fromEntries(byBuilding[building].map((r) => [r.id, r]));
 
   const redownload = async (po) => {
     const images = await loadImages(po.lines.map((l) => l.itemId));
     const date = po.createdAt?.toDate?.() || new Date();
-    download(await buildPoExcel({ building: po.building, date, lines: po.lines, images }), fileName(po.building, date));
+    download(await buildPoExcel({ building: po.building, date, lines: po.lines, images, subNames }), fileName(po.building, date));
   };
 
   // ไม่อนุมัติ / ปิดใบ: ปลดป้าย "กำลังสั่ง" ของรายการที่ยังผูกกับใบนี้
