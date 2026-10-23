@@ -75,9 +75,12 @@ export async function getImage(itemId) {
   return s.exists() ? s.data().data : null;
 }
 
+/** ประวัติของรายการ (เรียงในเครื่อง จึงไม่ต้องสร้าง index เพิ่ม) */
 export async function itemHistory(itemId) {
-  const s = await getDocs(query(collection(db, 'logs'), where('itemId', '==', itemId), orderBy('ts', 'desc'), limit(50)));
-  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const s = await getDocs(query(collection(db, 'logs'), where('itemId', '==', itemId)));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.ts?.seconds ?? Infinity) - (a.ts?.seconds ?? Infinity))
+    .slice(0, 50);
 }
 
 export async function recentLogs(after = null, n = 200) {

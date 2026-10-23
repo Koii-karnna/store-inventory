@@ -39,9 +39,8 @@
 1. **Authentication → Sign-in method → Email/Password → Enable**
 2. **Authentication → Settings → Authorized domains → Add domain** → `koii-karnna.github.io`
 3. **Firestore Database → Rules** → ลบของเดิมทั้งหมด → วางเนื้อหาไฟล์ [`firestore.rules`](firestore.rules) → **Publish**
-4. **Firestore Database → Indexes → Composite → Create index** สร้าง 2 ตัว (Query scope: Collection):
-   - Collection `logs`: `itemId` Ascending, `ts` Descending
-   - Collection `imports`: `buildings` Arrays, `at` Descending
+
+(ไม่ต้องสร้าง Index เพิ่ม)
 
 > ถ้าแก้ไฟล์ `firestore.rules` ภายหลัง ต้องวางใหม่ในข้อ 3 อีกครั้ง (เว็บจะไม่อัปเดต Rules ให้เอง)
 
@@ -86,7 +85,6 @@ src/lib/excel.js       สร้าง Excel ใบขอซื้อ (มีร
 src/lib/db.js          เขียน Firestore พร้อม Log
 src/pages/*            หน้าจอต่างๆ
 firestore.rules        สิทธิ์การเข้าถึงข้อมูล (วางใน Firebase Console เอง)
-firestore.indexes.json index ที่ต้องสร้าง (อ้างอิง)
 ```
 
 ข้อมูลใน Firestore: `items` (รายการ), `images` (รูปขนาดเต็ม), `vendors`, `pos` (ใบขอซื้อ), `imports`, `logs`, `users`, `config` (Group/หมวดย่อย/ยี่ห้อ), `settings`
