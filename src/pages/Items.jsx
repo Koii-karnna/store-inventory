@@ -95,8 +95,7 @@ export default function Items({ params, alerts }) {
         <select value={p.level} onChange={(e) => set('level', e.target.value)} aria-label="ระดับแจ้งเตือน">
           {LEVEL_FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <select value={p.status} onChange={(e) => set('status', e.target.value)} aria-label="สถานะ">
-          <option value="">{status === 'all' ? 'ทุกสถานะ' : 'ใช้งาน'}</option>
+        <select value={status} onChange={(e) => set('status', e.target.value)} aria-label="สถานะ">
           <option value="active">ใช้งาน</option>
           <option value="inactive">ยกเลิกใช้งาน</option>
           <option value="all">ทุกสถานะ</option>

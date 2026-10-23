@@ -37,20 +37,40 @@ export default function Dashboard() {
   }, [active]);
   const maxTotal = Math.max(1, ...byGroup.map((g) => g.total));
 
+  // CMC: Group เป็นหัวข้อ + แถวหมวดย่อย · NP: แถวละ Group
   const table = useMemo(() => {
-    const m = {};
-    for (const r of rows) {
-      const key = building === 'CMC' ? r.sub || '–' : r.group || 'ไม่ระบุ Group';
-      m[key] ??= { key, group: r.group, active: 0, inactive: 0, need: 0, out: 0, nomin: 0 };
-      const x = m[key];
+    const blank = () => ({ active: 0, inactive: 0, need: 0, out: 0, nomin: 0 });
+    const add = (x, r) => {
       if (r.v.active) x.active++; else x.inactive++;
       if (needsOrder(r.lv, r)) x.need++;
       if (r.lv === 'out') x.out++;
       if (r.lv === 'nomin') x.nomin++;
-    }
+    };
     const subName = Object.fromEntries((taxonomy?.subs || []).map((s) => [s.code, s.name]));
-    return Object.values(m).map((x) => ({ ...x, name: building === 'CMC' ? subName[x.key] || '' : '' })).sort((a, b) => a.key.localeCompare(b.key));
+    const groups = {};
+    for (const r of rows) {
+      const g = r.group || 'ไม่ระบุ Group';
+      groups[g] ??= { group: g, ...blank(), subs: {} };
+      add(groups[g], r);
+      if (building === 'CMC') {
+        const key = r.sub || '';
+        groups[g].subs[key] ??= { key, name: key ? subName[key] || '' : 'ไม่ระบุหมวดย่อย', ...blank() };
+        add(groups[g].subs[key], r);
+      }
+    }
+    const firstSub = (g) => Object.keys(g.subs).filter(Boolean).sort()[0] || 'zz';
+    return Object.values(groups)
+      .map((g) => ({ ...g, subs: Object.values(g.subs).sort((a, b) => (a.key || 'zz').localeCompare(b.key || 'zz')) }))
+      .sort((a, b) => (building === 'CMC' ? firstSub(a).localeCompare(firstSub(b)) : a.group.localeCompare(b.group)));
   }, [rows, building, taxonomy]);
+
+  const nums = (x) => <>
+    <td className="num">{x.active}</td>
+    <td className="num muted">{x.inactive}</td>
+    <td className="num">{x.need > 0 ? <b className="t-orange">{x.need}</b> : 0}</td>
+    <td className="num">{x.out > 0 ? <b className="t-red">{x.out}</b> : 0}</td>
+    <td className="num muted">{x.nomin}</td>
+  </>;
 
   const imp = lastImport[building];
   const ageDays = imp?.at?.toDate ? (Date.now() - imp.at.toDate().getTime()) / 86400000 : null;
@@ -116,24 +136,31 @@ export default function Dashboard() {
           <table className="table">
             <thead>
               <tr>
-                {building === 'CMC' && <><th>หมวด</th><th>ชื่อหมวดย่อย</th></>}
-                <th>Group</th><th className="num">ใช้งาน</th><th className="num">ยกเลิก</th>
+                {building === 'CMC' ? <><th>หมวด</th><th>ชื่อหมวดย่อย</th></> : <th>Group</th>}
+                <th className="num">ใช้งาน</th><th className="num">ยกเลิก</th>
                 <th className="num">ต้องสั่ง</th><th className="num">หมด</th><th className="num">ไม่มี Min</th>
               </tr>
             </thead>
-            <tbody>
-              {table.map((x) => (
-                <tr key={x.key} className="clickable" onClick={() => go('/items', building === 'CMC' ? { sub: x.key } : { group: x.key })}>
-                  {building === 'CMC' && <><td className="mono">{x.key}</td><td>{x.name}</td></>}
-                  <td>{building === 'CMC' ? x.group : x.key}</td>
-                  <td className="num">{x.active}</td>
-                  <td className="num muted">{x.inactive}</td>
-                  <td className="num">{x.need > 0 ? <b className="t-orange">{x.need}</b> : 0}</td>
-                  <td className="num">{x.out > 0 ? <b className="t-red">{x.out}</b> : 0}</td>
-                  <td className="num muted">{x.nomin}</td>
+            {building === 'CMC' ? table.map((g) => (
+              <tbody key={g.group}>
+                <tr className="group-row clickable" onClick={() => go('/items', { group: g.group })}>
+                  <td colSpan={2}>{g.group}</td>{nums(g)}
                 </tr>
-              ))}
-            </tbody>
+                {g.subs.map((x) => (
+                  <tr key={x.key || '-'} className="clickable" onClick={() => go('/items', x.key ? { sub: x.key } : { group: g.group })}>
+                    <td className="mono">{x.key || '–'}</td><td>{x.name}</td>{nums(x)}
+                  </tr>
+                ))}
+              </tbody>
+            )) : (
+              <tbody>
+                {table.map((g) => (
+                  <tr key={g.group} className="clickable" onClick={() => go('/items', { group: g.group })}>
+                    <td>{g.group}</td>{nums(g)}
+                  </tr>
+                ))}
+              </tbody>
+            )}
           </table>
         </div>
       </section>
