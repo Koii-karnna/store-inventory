@@ -14,6 +14,7 @@ export const ACTIONS = {
   user: 'ผู้ใช้',
   settings: 'ตั้งค่า',
   backup: 'สำรอง/กู้คืน',
+  newcode: 'ออกรหัสใหม่',
 };
 
 const BATCH_MAX = 450; // Firestore จำกัด 500 คำสั่งต่อชุด

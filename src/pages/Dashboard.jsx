@@ -4,7 +4,7 @@ import { go, Empty } from '../ui.jsx';
 import { needsOrder, LEVELS, fmtDateTime } from '../lib/model.js';
 import { backupAgeDays, BACKUP_REMIND_DAYS } from './Backup.jsx';
 
-const SEGMENTS = ['out', 'low', 'near', 'ok', 'nomin', 'nodata'];
+const SEGMENTS = ['out', 'low', 'near', 'ok', 'nomin', 'pending', 'nodata'];
 const STALE_DAYS = 7;
 
 export default function Dashboard() {
@@ -25,6 +25,7 @@ export default function Dashboard() {
     { label: 'ใกล้ Min', n: rows.filter((r) => r.lv === 'near').length, to: { level: 'near' } },
     { label: 'กำลังสั่ง', n: rows.filter((r) => r.ordering).length, to: { level: 'ordering' } },
     { label: 'รอตรวจ Group', n: rows.filter((r) => r.review).length, to: { level: 'review' } },
+    { label: 'รอเพิ่มใน Genedia', n: rows.filter((r) => r.lv === 'pending').length, to: { level: 'pending' } },
   ];
 
   const byGroup = useMemo(() => {

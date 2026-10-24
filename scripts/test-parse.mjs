@@ -51,3 +51,14 @@ const withOrder = items.map((i) => (i.code === '01-001-05-0519' ? { ...i, orderi
 const third = planImport(withOrder, [changed], plan.taxonomy);
 const u = third.updates.find((x) => x.code === '01-001-05-0519');
 assert(third.updates.length === 1 && u.patch['g.stock'] === a.g.stock + 10 && u.patch.ordering === null, 'คงเหลือเพิ่ม → อัปเดต + ปลดป้ายกำลังสั่ง');
+
+// รหัสที่ออกในเว็บ: Master ใหม่ไม่ล้าง และเมื่อมีใน Genedia แล้วสถานะ pending หาย
+const webItem = { id: 'CMC_01-002-39-1126', building: 'CMC', code: '01-002-39-1126', g: null, m: { name: 'หลอด LED ทดสอบ L&E', active: true, unit: 'หลอด', group: 'CMC-LIGHTING', brand: 'L&E', source: 'web' }, group: 'CMC-LIGHTING', sub: '01-002', brand: 'L&E', review: false, inGenedia: false, ordering: null, pending: { by: 'x' } };
+const taxWithWebSub = { ...plan.taxonomy, subs: [...plan.taxonomy.subs, { code: '01-012', name: 'หลอด UV', group: 'CMC-LIGHTING', closed: false, createdInWeb: true }] };
+const master = files.find((f) => f.kind === 'master');
+const reMaster = planImport([...items, webItem], [master], taxWithWebSub);
+assert(!reMaster.updates.some((x) => x.id === webItem.id), 'นำเข้า Master ใหม่ไม่ล้างรายการที่ออกรหัสในเว็บ');
+assert(reMaster.taxonomy.subs.some((s) => s.code === '01-012'), 'นำเข้า Master ใหม่ยังเก็บหมวดย่อยที่เปิดในเว็บ');
+const withNew = { ...store, items: [...store.items, { code: '01-002-39-1126', name: 'หลอด LED ทดสอบ L&E', active: true, stock: 0, min: 2, max: 5, cost: 0, price: 50 }] };
+const arrived = planImport([...items, webItem], [withNew], plan.taxonomy).updates.find((x) => x.id === webItem.id);
+assert(arrived && arrived.patch.pending === null && arrived.patch.inGenedia === true && !arrived.patch.review, 'รหัสที่จองไว้มีใน Genedia แล้ว → pending หาย');

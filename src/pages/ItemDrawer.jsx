@@ -30,6 +30,7 @@ export default function ItemDrawer({ item, onClose }) {
   const groups = [...new Set([...(taxonomy?.groups?.[item.building] || []), item.group].filter(Boolean))].sort();
   const subs = (taxonomy?.subs || []).filter((s) => s.group === form.group && (!s.closed || s.code === form.sub));
   const mm = mismatches(item);
+  const webItem = item.m?.source === 'web';
   const f = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }));
 
   const save = async () => {
@@ -41,6 +42,12 @@ export default function ItemDrawer({ item, onClose }) {
       lastInDate: form.lastInDate || null, lastInQty,
     };
     if (patch.group && item.review) patch.review = false;
+    // รายการที่ออกรหัสในเว็บ: แก้ชื่อ/หน่วยมาตรฐานได้ (Group/ยี่ห้อ ให้ตรงกันด้วย)
+    if (webItem) {
+      if (!form.mName.trim() || !form.mUnit.trim()) throw new Error('ชื่อและหน่วยนับห้ามว่าง');
+      const m = { ...item.m, name: form.mName.trim().replace(/\s+/g, ' '), unit: form.mUnit.trim(), group: patch.group, brand };
+      if (JSON.stringify(m) !== JSON.stringify(item.m)) patch.m = m;
+    }
     const changed = await updateItem(user, item, patch);
     if (brand && !brands.includes(brand)) {
       await commit(user, [{ type: 'set', path: ['config', 'brands'], data: { list: arrayUnion(brand) }, merge: true }]);
@@ -125,6 +132,10 @@ export default function ItemDrawer({ item, onClose }) {
       <section>
         <h4>ข้อมูลในเว็บ</h4>
         <div className="form">
+          {webItem && <>
+            <label>ชื่อมาตรฐาน (ออกรหัสในเว็บ){item.pending && ' — แก้ก่อนเพิ่มใน Genedia'}<input value={form.mName} onChange={f('mName')} disabled={!isAdmin} /></label>
+            <label>หน่วยนับ<input value={form.mUnit} onChange={f('mUnit')} disabled={!isAdmin} /></label>
+          </>}
           <label>Group
             <select value={form.group} onChange={(e) => setForm((x) => ({ ...x, group: e.target.value, sub: '' }))} disabled={!isAdmin}>
               <option value="">– ไม่ระบุ –</option>
@@ -200,5 +211,6 @@ function pick(item) {
   return {
     group: item.group || '', sub: item.sub || '', brand: item.brand || '', note: item.note || '', vendors: item.vendors || [],
     lastInDate: item.lastInDate || '', lastInQty: item.lastInQty ?? '',
+    mName: item.m?.name || '', mUnit: item.m?.unit || '',
   };
 }

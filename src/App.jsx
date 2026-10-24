@@ -13,6 +13,7 @@ import Items from './pages/Items.jsx';
 import PurchaseOrders from './pages/PurchaseOrders.jsx';
 import Mismatch from './pages/Mismatch.jsx';
 import ImportPage from './pages/Import.jsx';
+import NewCode from './pages/NewCode.jsx';
 import Vendors from './pages/Vendors.jsx';
 import Logs from './pages/Logs.jsx';
 import Users from './pages/Users.jsx';
@@ -123,6 +124,7 @@ const NAV = [
   { path: '/mismatch', label: 'ไม่ตรง Master' },
   { path: '/vendors', label: 'Vendor' },
   { path: '/import', label: 'นำเข้าไฟล์', admin: true },
+  { path: '/newcode', label: 'ออกรหัสใหม่', admin: true },
   { path: '/logs', label: 'Log' },
   { path: '/users', label: 'ผู้ใช้', admin: true },
   { path: '/settings', label: 'ตั้งค่า', admin: true },
@@ -144,6 +146,7 @@ export function Shell() {
   else if (path === '/vendors') page = <Vendors />;
   else if (path === '/logs') page = <Logs />;
   else if (path === '/import' && isAdmin) page = <ImportPage />;
+  else if (path === '/newcode' && isAdmin) page = <NewCode />;
   else if (path === '/users' && isAdmin) page = <Users />;
   else if (path === '/settings' && isAdmin) page = <Settings />;
   else page = <Dashboard />;

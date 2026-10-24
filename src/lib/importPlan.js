@@ -13,7 +13,7 @@ export const FIELD_LABELS = {
 
 const G_FIELDS = ['name', 'active', 'unit', 'group', 'stock', 'min', 'max', 'cost', 'price'];
 const M_FIELDS = ['name', 'active', 'unit', 'group', 'brand'];
-const TOP_FIELDS = ['group', 'sub', 'brand', 'review', 'inGenedia', 'ordering'];
+const TOP_FIELDS = ['group', 'sub', 'brand', 'review', 'inGenedia', 'ordering', 'pending'];
 
 const same = (a, b) => (a ?? null) === (b ?? null) || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
@@ -49,7 +49,8 @@ export function planImport(existing, files, taxonomy, opts = {}) {
       if (!it.brand || opts.overwriteWeb) it.brand = r.brand || it.brand;
       next.set(id, it);
     }
-    for (const it of next.values()) if (it.m && !seen.has(it.id)) it.m = null;
+    // รายการที่ออกรหัสในเว็บ (m.source = 'web') ไม่ได้อยู่ในไฟล์ Master จึงไม่ล้าง
+    for (const it of next.values()) if (it.m && it.m.source !== 'web' && !seen.has(it.id)) it.m = null;
   }
 
   // 2) Part List Report: หน่วยนับ + Group ใน Genedia
@@ -81,6 +82,7 @@ export function planImport(existing, files, taxonomy, opts = {}) {
         group: rp ? rp.group : old.group ?? null,
       };
       it.inGenedia = true;
+      it.pending = null; // รหัสที่จองไว้ถูกเพิ่มใน Genedia แล้ว
       // ของเข้าแล้ว (คงเหลือเพิ่มขึ้นจากตอนสั่ง) → ปลดป้าย "กำลังสั่ง"
       if (it.ordering && r.stock > (it.ordering.stockAtOrder ?? Infinity)) it.ordering = null;
       next.set(id, it);
@@ -123,5 +125,11 @@ export function planImport(existing, files, taxonomy, opts = {}) {
     };
   }
 
-  return { creates, updates, summary, taxonomy: master?.taxonomy || null, brands: master?.brands || null };
+  // Master ใหม่: เก็บหมวดย่อยที่เปิดในเว็บไว้ด้วย
+  let newTax = master?.taxonomy || null;
+  if (newTax && taxonomy?.subs) {
+    const have = new Set(newTax.subs.map((s) => s.code));
+    newTax = { ...newTax, subs: [...newTax.subs, ...taxonomy.subs.filter((s) => s.createdInWeb && !have.has(s.code))] };
+  }
+  return { creates, updates, summary, taxonomy: newTax, brands: master?.brands || null };
 }

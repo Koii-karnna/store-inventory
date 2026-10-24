@@ -7,9 +7,9 @@ import { getImage } from '../lib/db.js';
 
 const LEVEL_FILTERS = [
   ['', 'ทุกระดับ'], ['need', 'ต้องสั่ง (หมด + ถึง Min)'], ['out', 'หมด'], ['low', 'ถึง Min'], ['near', 'ใกล้ Min'],
-  ['ok', 'ปกติ'], ['nomin', 'ไม่มี Min'], ['ordering', 'กำลังสั่ง'], ['review', 'รอตรวจ Group'], ['nodata', 'ไม่มีใน Genedia'],
+  ['ok', 'ปกติ'], ['nomin', 'ไม่มี Min'], ['ordering', 'กำลังสั่ง'], ['review', 'รอตรวจ Group'], ['pending', 'รอเพิ่มใน Genedia'], ['nodata', 'ไม่มีใน Genedia'],
 ];
-const LEVEL_ORDER = { out: 0, low: 1, near: 2, ok: 3, nomin: 4, nodata: 5, inactive: 6 };
+const LEVEL_ORDER = { out: 0, low: 1, near: 2, ok: 3, nomin: 4, pending: 5, nodata: 6, inactive: 7 };
 const PAGE = 300;
 
 export default function Items({ params, alerts }) {
@@ -20,7 +20,7 @@ export default function Items({ params, alerts }) {
   const [shown, setShown] = useState(PAGE);
   const base = alerts ? '/alerts' : '/items';
   const p = { q: '', group: '', sub: '', level: '', status: '', brand: '', vendor: '', ...params };
-  const status = p.status || (['review', 'nodata', 'ordering'].includes(p.level) ? 'all' : 'active');
+  const status = p.status || (['review', 'nodata', 'ordering', 'pending'].includes(p.level) ? 'all' : 'active');
   const set = (k, v) => { setShown(PAGE); go(base, { ...params, [k]: v, ...(k === 'group' ? { sub: '' } : {}) }); };
 
   const rows = byBuilding[building];

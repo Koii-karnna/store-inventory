@@ -39,6 +39,7 @@ export const LEVELS = {
   ok: { label: 'ปกติ', color: 'green' },
   nomin: { label: 'ไม่มี Min', color: 'gray' },
   nodata: { label: 'ไม่มีใน Genedia', color: 'gray' },
+  pending: { label: 'รอเพิ่มใน Genedia', color: 'blue' },
   inactive: { label: 'ยกเลิกใช้งาน', color: 'gray' },
 };
 
@@ -46,7 +47,7 @@ export const LEVELS = {
 export function level(item, settings = DEFAULT_SETTINGS) {
   const v = view(item, settings);
   if (!v.active) return 'inactive';
-  if (!item.g || item.inGenedia === false) return 'nodata';
+  if (!item.g || item.inGenedia === false) return item.pending ? 'pending' : 'nodata';
   if (!v.min) return 'nomin';
   if (v.stock <= 0) return 'out';
   if (v.stock <= v.min) return 'low';
