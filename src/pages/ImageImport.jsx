@@ -7,7 +7,7 @@ import { processImage } from '../lib/image.js';
 
 const CHUNK = 20; // รูปต่อการบันทึก 1 ครั้ง (ไม่ให้เกินขนาดที่ Firestore รับได้)
 
-/** นำเข้ารูปแบบ "วางในเซลล์" จากไฟล์ Excel ที่มีคอลัมน์รหัส (Code) */
+/** นำเข้ารูปจากไฟล์ Excel ที่มีคอลัมน์รหัส (Code) — รูปวางในเซลล์ หรือลอยบนเซลล์ */
 export default function ImageImport() {
   const { rows, user } = useData();
   const [scan, setScan] = useState(null);
@@ -16,7 +16,12 @@ export default function ImageImport() {
   const [result, setResult] = useState(null);
 
   const read = async (file) => {
-    setScan({ loading: true, name: file.name }); setResult(null);
+    setResult(null);
+    if (!/\.xlsx$/i.test(file.name)) {
+      setScan({ needXlsx: true, name: file.name });
+      return;
+    }
+    setScan({ loading: true, name: file.name });
     try {
       const { extractCellImages } = await import('../lib/cellImages.js');
       const { images, noCode } = await extractCellImages(file);
@@ -74,16 +79,26 @@ export default function ImageImport() {
     <div className="card">
       <h2>นำเข้ารูปจาก Excel</h2>
       <p className="muted small">
-        สำหรับไฟล์ Excel ที่ใส่รูปแบบ <b>วางในเซลล์ (Place in Cell)</b> และมีคอลัมน์หัวตาราง <b>Code</b> หรือ <b>รหัส</b> ในแถวเดียวกับรูป ·
-        ระบบย่อรูปให้อัตโนมัติ (ไม่เกิน 80 KB) · ไฟล์ใหญ่อาจใช้เวลาอ่าน 10–30 วินาที
+        สำหรับไฟล์ Excel (.xlsx) ที่มีรูปอยู่ในแถวเดียวกับรหัส (หัวตาราง <b>Code</b> หรือ <b>รหัส</b>) — รูปแบบ <b>วางในเซลล์</b> หรือ <b>ลอยบนเซลล์</b> ก็ได้ ·
+        ระบบย่อรูปให้อัตโนมัติ (ไม่เกิน 80 KB) · ไฟล์ .xls ให้ Save As เป็น .xlsx ก่อน
       </p>
       {!progress && (
         <label className="btn">
-          <input type="file" accept=".xlsx" hidden onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; if (f) read(f); }} />
+          <input type="file" accept=".xlsx,.xls" hidden onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; if (f) read(f); }} />
           เลือกไฟล์ Excel ที่มีรูป
         </label>
       )}
       {scan?.loading && <p className="muted">กำลังอ่าน {scan.name}…</p>}
+      {scan?.needXlsx && (
+        <div className="warn" style={{ marginTop: 12 }}>
+          <b>{scan.name}</b> เป็นไฟล์ Excel รุ่นเก่า (.xls) ซึ่งเว็บอ่านรูปไม่ได้ ให้แปลงก่อน:
+          <ol>
+            <li>เปิดไฟล์ใน Excel</li>
+            <li><b>File → Save As</b> → ช่อง Save as type เลือก <b>Excel Workbook (*.xlsx)</b> → Save</li>
+            <li>กลับมาเลือกไฟล์ .xlsx ที่ได้</li>
+          </ol>
+        </div>
+      )}
       {scan?.matches && (
         <div className="form" style={{ marginTop: 12 }}>
           <table className="table compact">
