@@ -125,6 +125,9 @@ export const fmtDateTime = (ts) => {
   return d ? d.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : '–';
 };
 
+/** '2026-10' → 'ต.ค. 2569' */
+export const fmtMonthThai = (ym) => (ym ? new Date(`${ym}-01T00:00:00`).toLocaleDateString('th-TH', { month: 'short', year: 'numeric' }) : '');
+
 /** '2026-10-12' → '12 ต.ค. 2569' */
 export const fmtIsoDateThai = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 

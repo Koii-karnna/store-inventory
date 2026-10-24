@@ -51,12 +51,85 @@ export function guessBuildingFromCodes(codes) {
 export function parseFile(fileName, wb) {
   const names = wb.SheetNames;
   if (names.includes('CMC Master') && names.includes('NP Master')) return parseMaster(wb);
+  if (names.includes('02_ธุรกรรมทั้งหมด') && names.includes('10_สถิติรายรายการ')) return parseUsageBaseline(wb);
 
   const rows = sheetRows(wb.Sheets[names[0]]);
   const head = (rows[0] || []).map(str);
   if (head.includes('รหัส') && head.includes('คงเหลือ')) return parseStoreList(fileName, rows);
   if (head[0] === 'Part Code' && head.includes('Available')) return parseReport(rows);
+  if (head[0] === 'Order No.' && head.includes('Part Issues Date')) return parseUsageReport(rows);
   return { kind: 'unknown', fileName };
+}
+
+// ---------- ข้อมูลการเบิก ----------
+/** วันที่จาก Excel (ตัวเลข serial หรือข้อความ) → 'YYYY-MM-DDTHH:mm:ss' (ละเอียดถึงวินาที ใช้ตรวจบรรทัดซ้ำ) */
+export function excelDateTime(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') {
+    if (!(v > 0)) return null;
+    const ms = Math.round(v * 86400) * 1000; // ปัดเป็นวินาที
+    return new Date(Date.UTC(1899, 11, 30) + ms).toISOString().slice(0, 19);
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(String(v).trim());
+  return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4] || '00'}:${m[5] || '00'}:${m[6] || '00'}` : null;
+}
+
+/**
+ * ไฟล์ Usage_Reconciliation (ตรวจแล้ว) → ประวัติการเบิกตั้งต้น
+ * ใช้ชีต 02 (ทุกบรรทัด + นับในยอด) และชีต 10 (รายการที่ไม่ใช้เสนอ Min/Max)
+ */
+function parseUsageBaseline(wb) {
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets['02_ธุรกรรมทั้งหมด'], { defval: null, raw: true });
+  const byB = { CMC: [], NP: [] };
+  for (const r of rows) {
+    const b = normBuilding(r.Building);
+    const code = str(r['Part Code']);
+    const qty = num(r.Qty);
+    const f = excelDateTime(r['Finish Date']);
+    const d = excelDateTime(r['Usage Date']);
+    if (!b || !code || qty === null || !d) continue;
+    const ln = { s: str(r.System), o: str(r['Order No']), c: code, q: qty, f: f || d, d: d.slice(0, 10) };
+    const issued = excelDateTime(r['Part Issues Date']);
+    if (issued) ln.i = issued;
+    const src = str(r['Part Code (source)']);
+    if (src && src !== code) ln.cs = src;
+    if (num(r.Price) !== null) ln.p = num(r.Price);
+    if (str(r.Location)) ln.l = str(r.Location);
+    if (str(r['นับในยอด']) === 'N') ln.x = str(r['ไม่นับเพราะ']) || 'ไม่นับ';
+    byB[b].push(ln);
+  }
+  const st = XLSX.utils.sheet_to_json(wb.Sheets['10_สถิติรายรายการ'], { defval: null, raw: true });
+  const noMinMax = st.filter((r) => str(r['ใช้เสนอ Min/Max ได้']) && str(r['ใช้เสนอ Min/Max ได้']) !== 'ได้')
+    .map((r) => `${normBuilding(r.Building)}_${str(r['Part Code'])}`);
+  return {
+    kind: 'usageBaseline',
+    usage: Object.entries(byB).map(([building, lines]) => ({ building, lines })),
+    noMinMax,
+    items: rows,
+  };
+}
+
+/** Part Usage Report จาก Genedia (G2) — วันที่ใช้ = วันที่ปิดงาน */
+function parseUsageReport(rows) {
+  let building = null, code = null;
+  const lines = [];
+  for (const r of rows.slice(1)) {
+    const c0 = str(r[0]);
+    if (!c0 || c0.startsWith('Branch:') || c0.startsWith('Group:')) continue;
+    if (c0.startsWith('Store:')) { building = normBuilding(c0.slice(6)); continue; }
+    if (c0.startsWith('Part:')) { code = c0.slice(5).split(' : ')[0].trim(); continue; }
+    if (!building || !code) continue;
+    const f = excelDateTime(r[3]);
+    const qty = num(r[5]);
+    if (!f || qty === null) continue;
+    const ln = { s: 'G2', o: c0, c: code, q: qty, f, d: f.slice(0, 10) };
+    const issued = excelDateTime(r[4]);
+    if (issued) ln.i = issued;
+    if (num(r[6]) !== null) ln.p = num(r[6]);
+    if (str(r[8])) ln.l = str(r[8]);
+    lines.push(ln);
+  }
+  return { kind: 'usageReport', building, usage: [{ building, lines }], items: lines };
 }
 
 function parseStoreList(fileName, rows) {

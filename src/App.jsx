@@ -12,6 +12,8 @@ import Dashboard from './pages/Dashboard.jsx';
 import Items from './pages/Items.jsx';
 import PurchaseOrders from './pages/PurchaseOrders.jsx';
 import Mismatch from './pages/Mismatch.jsx';
+import Usage from './pages/Usage.jsx';
+import Review from './pages/Review.jsx';
 import ImportPage from './pages/Import.jsx';
 import NewCode from './pages/NewCode.jsx';
 import Vendors from './pages/Vendors.jsx';
@@ -121,6 +123,8 @@ const NAV = [
   { path: '/items', label: 'รายการอะไหล่' },
   { path: '/alerts', label: 'แจ้งเตือน', badge: 'alerts' },
   { path: '/po', label: 'ใบขอซื้อ', badge: 'draft' },
+  { path: '/usage', label: 'การใช้อะไหล่' },
+  { path: '/review', label: 'ทบทวน' },
   { path: '/mismatch', label: 'ไม่ตรง Master' },
   { path: '/vendors', label: 'Vendor' },
   { path: '/import', label: 'นำเข้าไฟล์', admin: true },
@@ -143,6 +147,8 @@ export function Shell() {
   else if (path === '/alerts') page = <Items params={{ level: 'need', ...params }} alerts />;
   else if (path === '/po') page = <PurchaseOrders params={params} />;
   else if (path === '/mismatch') page = <Mismatch />;
+  else if (path === '/usage') page = <Usage />;
+  else if (path === '/review') page = <Review params={params} />;
   else if (path === '/vendors') page = <Vendors />;
   else if (path === '/logs') page = <Logs />;
   else if (path === '/import' && isAdmin) page = <ImportPage />;

@@ -249,6 +249,58 @@ export async function buildItemsExcel({ building, filterText, rows, images = {} 
   return wb.xlsx.writeBuffer();
 }
 
+const YELLOW = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+
+/**
+ * ไฟล์ทบทวนสำหรับช่าง (Min-Max / Dead Stock / ยกเลิกแต่มีของ)
+ * columns: [{h, k, w, num?, money?, tech?}] — tech = ช่องเหลืองให้ช่างแก้
+ * howto: [[หัวข้อ, รายละเอียด]] · list: ตัวเลือก dropdown ของช่องแรกที่เป็น tech (ถ้ามี)
+ */
+export async function buildReviewExcel({ sheetName, columns, rows, howto, list }) {
+  const ExcelJS = await loadExcelJS();
+  const wb = new ExcelJS.Workbook();
+  const info = wb.addWorksheet('วิธีใช้');
+  info.columns = [{ width: 24 }, { width: 110 }];
+  info.addRow(['หัวข้อ', 'รายละเอียด']).font = { name: FONT, bold: true };
+  for (const r of howto) info.addRow(r).eachCell((c) => { c.font = { name: FONT, size: 10 }; c.alignment = { wrapText: true, vertical: 'top' }; });
+
+  const ws = wb.addWorksheet(sheetName);
+  ws.columns = columns.map((c) => ({ width: c.w || 12 }));
+  const head = ws.getRow(1);
+  columns.forEach((c, i) => {
+    const cell = head.getCell(i + 1);
+    cell.value = c.h;
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: c.tech ? 'FF7F6000' : 'FFFFFFFF' } };
+    cell.fill = c.tech ? { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD966' } } : { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = BORDER;
+  });
+  head.height = 36;
+  rows.forEach((r, ri) => {
+    const row = ws.getRow(ri + 2);
+    columns.forEach((c, ci) => {
+      const cell = row.getCell(ci + 1);
+      const v = r[c.k];
+      cell.value = v === undefined || v === null ? '' : v;
+      cell.font = { name: FONT, size: 10 };
+      cell.border = BORDER;
+      if (c.tech) cell.fill = YELLOW;
+      if (c.money) cell.numFmt = '#,##0.00';
+      else if (c.dec) cell.numFmt = '0.00';
+      if (c.num || c.money || c.dec) cell.alignment = { horizontal: 'right' };
+      if (c.wrap) cell.alignment = { wrapText: true, vertical: 'top' };
+    });
+  });
+  const firstTech = columns.findIndex((c) => c.tech);
+  if (list && firstTech >= 0 && rows.length) {
+    const col = String.fromCharCode(65 + firstTech);
+    ws.dataValidations.add(`${col}2:${col}${rows.length + 1}`, { type: 'list', allowBlank: true, formulae: [`"${list.join(',')}"`] });
+  }
+  ws.views = [{ state: 'frozen', ySplit: 1, xSplit: 2 }];
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+  return wb.xlsx.writeBuffer();
+}
+
 /** รายการที่ต้องไปแก้ใน Genedia */
 export async function buildMismatchExcel(rows, building) {
   const ExcelJS = await loadExcelJS();

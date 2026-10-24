@@ -5,17 +5,22 @@ import { useData } from '../state.jsx';
 import { AsyncButton, toast } from '../ui.jsx';
 import { commit, describeChange, slimChange } from '../lib/db.js';
 import { planImport } from '../lib/importPlan.js';
+import { planUsage, usageDocId, USAGE_META_ID } from '../lib/usage.js';
+import { loadUsageDoc, clearUsageCache } from '../lib/usageStore.js';
 import ImageImport from './ImageImport.jsx';
 
 const KIND_LABEL = {
   store: 'Store Part List (คงเหลือ/Min/Max/สถานะ)',
   report: 'Part List Report (หน่วยนับ/Group ใน Genedia)',
   master: 'Master (ชื่อ/Group/หมวดย่อย/ยี่ห้อ ตามมาตรฐาน)',
+  usageReport: 'Part Usage Report (การเบิกอะไหล่)',
+  usageBaseline: 'ประวัติการเบิกที่ตรวจแล้ว (ตั้งต้น — แทนที่ข้อมูลการเบิกทั้งหมด)',
   unknown: 'ไม่รู้จักไฟล์นี้',
 };
+const NOT_IN_MASTER = 'รหัสไม่อยู่ใน Master (เก็บเป็นประวัติ)';
 
 export default function ImportPage() {
-  const { rows, taxonomy, user } = useData();
+  const { rows, taxonomy, user, usageMeta } = useData();
   const [files, setFiles] = useState([]);
   const [overwriteWeb, setOverwriteWeb] = useState(false);
   const [plan, setPlan] = useState(null);
@@ -42,7 +47,29 @@ export default function ImportPage() {
 
   const check = async () => {
     const existing = rows.map(({ v, lv, ...rest }) => rest); // eslint-disable-line no-unused-vars
-    setPlan(planImport(existing, valid.map((f) => f.parsed), taxonomy, { overwriteWeb }));
+    const p = planImport(existing, valid.map((f) => f.parsed), taxonomy, { overwriteWeb });
+
+    // ข้อมูลการเบิก: ไฟล์ตั้งต้นแทนที่ทั้งหมด · Part Usage Report เพิ่มเฉพาะบรรทัดใหม่
+    const baseline = valid.find((f) => f.parsed.kind === 'usageBaseline')?.parsed;
+    const reports = valid.filter((f) => f.parsed.kind === 'usageReport').map((f) => f.parsed);
+    if (baseline || reports.length) {
+      const inMaster = new Set(rows.filter((r) => r.m).map((r) => r.id));
+      const incoming = [
+        ...(baseline?.usage || []),
+        ...reports.flatMap((r) => r.usage).map(({ building, lines }) => ({
+          building,
+          lines: lines.map((ln) => (inMaster.has(`${building}_${ln.c}`) ? ln : { ...ln, x: NOT_IN_MASTER })),
+        })),
+      ];
+      const existingDocs = {};
+      if (!baseline) {
+        for (const b of ['CMC', 'NP']) {
+          for (const y of usageMeta?.years?.[b] || []) existingDocs[usageDocId(b, y)] = await loadUsageDoc(b, y);
+        }
+      }
+      p.usage = { ...planUsage(existingDocs, incoming, { replace: !!baseline }), baseline: !!baseline, noMinMax: baseline?.noMinMax };
+    }
+    setPlan(p);
   };
 
   const confirmImport = async () => {
@@ -63,9 +90,31 @@ export default function ImportPage() {
       { action: 'import', importId, summary: `นำเข้า ${valid.map((f) => f.name).join(', ')} · CMC ใหม่ ${s.CMC.created} แก้ ${s.CMC.updated} · NP ใหม่ ${s.NP.created} แก้ ${s.NP.updated}` },
       ...plan.updates.map((u) => ({ action: 'import', importId, building: u.building, code: u.code, itemId: u.id, changes: u.changes.map(slimChange) })),
     ];
-    setProgress({ done: 0, total: ops.length + logs.length });
+
+    // ข้อมูลการเบิก: เขียนเฉพาะเอกสาร (อาคาร-ปี) ที่เปลี่ยน + meta
+    const usageOps = [];
+    if (plan.usage) {
+      const u = plan.usage;
+      for (const id of u.changed) {
+        const [, b, y] = id.split('_');
+        usageOps.push({ type: 'set', path: ['config', id], data: { building: b, year: Number(y), lines: u.docs[id], updatedAt: serverTimestamp() } });
+      }
+      const years = { CMC: [], NP: [] };
+      for (const id of Object.keys(u.docs)) { const [, b, y] = id.split('_'); if (u.docs[id].length) years[b].push(Number(y)); }
+      for (const b of Object.keys(years)) years[b].sort();
+      usageOps.push({
+        type: 'set', path: ['config', USAGE_META_ID], merge: true,
+        data: { years, version: Date.now(), lastImport: { at: serverTimestamp(), by: user.name, files: valid.filter((f) => f.parsed.kind.startsWith('usage')).map((f) => f.name) }, ...(u.baseline ? { noMinMax: u.noMinMax || [] } : {}) },
+      });
+      const us = u.summary;
+      logs.push({ action: 'import', importId, summary: `ข้อมูลการเบิก${u.baseline ? ' (ตั้งต้น แทนที่ทั้งหมด)' : ''}: ${Object.entries(us).map(([b, x]) => `${b} เพิ่ม ${x.added} บรรทัด ซ้ำ ${x.duplicate}`).join(' · ')}` });
+    }
+    setProgress({ done: 0, total: ops.length + logs.length + usageOps.length });
     try {
-      await commit(user, ops, logs, (done, total) => setProgress({ done, total }));
+      // เอกสารการเบิกมีขนาดใหญ่ บันทึกทีละเอกสาร
+      for (const [i, op] of usageOps.entries()) { await commit(user, [op]); setProgress({ done: i + 1, total: ops.length + logs.length + usageOps.length }); }
+      await commit(user, ops, logs, (done, total) => setProgress({ done: done + usageOps.length, total: total + usageOps.length }));
+      clearUsageCache();
       toast('นำเข้าเรียบร้อย');
       setFiles([]); setPlan(null);
     } finally {
@@ -84,6 +133,7 @@ export default function ImportPage() {
         <li>Export จาก Genedia: <b>Store Part List [CMC].xls</b>, <b>Store Part List [CMA].xls</b> และ <b>Part List Report</b></li>
         <li>ลากไฟล์ทั้งหมดมาวางพร้อมกัน (ครั้งแรกให้ใส่ไฟล์ <b>Master</b> ด้วย)</li>
         <li>กด "ตรวจสอบ" ดูว่ามีอะไรเปลี่ยน แล้วกด "ยืนยันนำเข้า"</li>
+        <li>การเบิกอะไหล่: ใส่ <b>Part Usage Report</b> ของ CMC และ NP (ไม่ต้องกรองวันที่) — ระบบตัดบรรทัดที่เคยนำเข้าแล้วให้เอง</li>
       </ol>
 
       <label
@@ -110,7 +160,8 @@ export default function ImportPage() {
                       <select value={f.parsed.building || ''} onChange={(e) => setBuilding(f.name, e.target.value)}>
                         <option value="">– เลือก –</option><option value="CMC">CMC</option><option value="NP">NP (CMA)</option>
                       </select>
-                    ) : f.parsed.kind === 'report' ? 'CMC + NP' : f.parsed.kind === 'master' ? 'CMC + NP' : '–'}
+                    ) : f.parsed.kind === 'usageReport' ? (f.parsed.building || '–')
+                      : ['report', 'master', 'usageBaseline'].includes(f.parsed.kind) ? 'CMC + NP' : '–'}
                     {f.parsed.kind === 'store' && !f.parsed.buildingFromName && f.parsed.building && <div className="small t-orange">เดาจากรหัส กรุณาตรวจ</div>}
                   </td>
                   <td className="num">{f.parsed.items?.length ?? '–'}</td>
@@ -164,12 +215,27 @@ export default function ImportPage() {
                 {updates.length > 300 && <li className="muted">…และอีก {updates.length - 300} รายการ</li>}
               </ul>
             </details>
-          ) : !creates.length && <p className="muted">ไม่มีการเปลี่ยนแปลงของอาคาร {showB}</p>}
+          ) : !creates.length && <p className="muted">ไม่มีการเปลี่ยนแปลงของรายการอาคาร {showB}</p>}
+
+          {plan.usage && (
+            <>
+              <h4>ข้อมูลการเบิก{plan.usage.baseline && <span className="t-orange"> — ไฟล์ตั้งต้น: จะแทนที่ข้อมูลการเบิกเดิมทั้งหมด</span>}</h4>
+              <table className="table compact">
+                <thead><tr><th>อาคาร</th><th className="num">บรรทัดใหม่</th><th className="num">ซ้ำ (ข้าม)</th><th className="num">จำนวนเบิกที่เพิ่ม</th><th className="num">ไม่นับ (รหัสไม่อยู่ใน Master ฯลฯ)</th><th className="num">วันที่ผิดปกติ</th></tr></thead>
+                <tbody>
+                  {Object.entries(plan.usage.summary).map(([b, x]) => (
+                    <tr key={b}><td>{b}</td><td className="num">{x.added}</td><td className="num">{x.duplicate}</td><td className="num">{Math.round(x.qty * 1000) / 1000}</td><td className="num">{x.notCounted}</td><td className="num">{x.badDate ? <b className="t-red">{x.badDate}</b> : 0}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+              {Object.values(plan.usage.summary).some((x) => x.badDate) && <p className="warn small">มีบรรทัดที่วันที่ปิดงานก่อนปี 2023 — นำเข้าตามต้นทาง ควรตรวจใน Genedia</p>}
+            </>
+          )}
 
           <div className="row-actions">
             {progress
               ? <div className="progress"><div style={{ width: `${(progress.done / progress.total) * 100}%` }} /><span>กำลังบันทึก {progress.done}/{progress.total}</span></div>
-              : <AsyncButton className="btn btn-primary" onClick={confirmImport} disabled={!plan.creates.length && !plan.updates.length && !plan.taxonomy && !stores.length}>ยืนยันนำเข้า</AsyncButton>}
+              : <AsyncButton className="btn btn-primary" onClick={confirmImport} disabled={!plan.creates.length && !plan.updates.length && !plan.taxonomy && !stores.length && !plan.usage?.changed.length}>ยืนยันนำเข้า</AsyncButton>}
           </div>
         </div>
       )}

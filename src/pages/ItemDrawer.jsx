@@ -5,6 +5,7 @@ import { Drawer, LevelBadge, Badge, AsyncButton, toast } from '../ui.jsx';
 import { fmtNum, fmtDateTime, mismatches, MISMATCH_TYPES } from '../lib/model.js';
 import { updateItem, commit, getImage, itemHistory, describeChange, ACTIONS } from '../lib/db.js';
 import { processImage } from '../lib/image.js';
+import UsageSection from './UsageSection.jsx';
 
 export default function ItemDrawer({ item, onClose }) {
   const { isAdmin, user, taxonomy, brands, vendors } = useData();
@@ -118,6 +119,8 @@ export default function ItemDrawer({ item, onClose }) {
           <dt>หน่วยนับ</dt><dd>{item.v.unit || '–'}</dd>
         </dl>
       </section>
+
+      <UsageSection item={item} />
 
       {mm.length > 0 && (
         <section>

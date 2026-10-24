@@ -146,6 +146,16 @@ td.row-actions { margin: 0; }
 .stat-red { border-left-color: var(--red); } .stat-red .stat-n { color: var(--red); }
 .stat-orange { border-left-color: var(--orange); } .stat-orange .stat-n { color: var(--orange); }
 .stat-gray { border-left-color: var(--gray); }
+.cards-4 { grid-template-columns: repeat(4, 1fr); }
+.cards-4 .stat { cursor: default; }
+.vbars { display: flex; align-items: flex-end; gap: 10px; height: 190px; padding: 6px 4px 0; margin-bottom: 14px; overflow-x: auto; }
+.vbar { flex: 1 1 0; min-width: 34px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }
+.vbar-fill { width: 70%; max-width: 60px; background: var(--primary-2); border-radius: 4px 4px 0 0; min-height: 2px; }
+.vbar-n { font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.vbar-l { font-size: 11.5px; color: var(--muted); white-space: pre; text-align: center; line-height: 1.25; min-height: 30px; }
+.vbars-months { gap: 4px; }
+.vbars-months .vbar { min-width: 26px; }
+.vbar-gap .vbar-fill { background: repeating-linear-gradient(45deg, #e4e7ec, #e4e7ec 4px, #f8fafc 4px, #f8fafc 8px); border: 1px dashed #c3c9d3; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 20px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; color: var(--text); }
 .chip:hover { border-color: #c5ccd8; }
@@ -262,6 +272,7 @@ details summary { cursor: pointer; font-weight: 600; margin: 10px 0 6px; }
 /* ---------- มือถือ ---------- */
 @media (max-width: 1000px) {
   .cards { grid-template-columns: repeat(3, 1fr); }
+  .cards-4 { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 640px) {
   .main { padding: 12px 16px; }

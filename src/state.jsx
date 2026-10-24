@@ -22,6 +22,7 @@ export function DataProvider({ user, children }) {
   const [backupInfo, setBackupInfo] = useState(null);
   const [taxonomy, setTaxonomy] = useState(null);
   const [brands, setBrands] = useState([]);
+  const [usageMeta, setUsageMeta] = useState(null);
   const [pos, setPos] = useState([]);
   const [users, setUsers] = useState([]);
   const [lastImport, setLastImport] = useState({});
@@ -37,6 +38,7 @@ export function DataProvider({ user, children }) {
       listen(doc(db, 'settings', 'backup'), (s) => setBackupInfo(s.data() || null)),
       listen(doc(db, 'config', 'taxonomy'), (s) => setTaxonomy(s.data() || null)),
       listen(doc(db, 'config', 'brands'), (s) => setBrands(s.data()?.list || [])),
+      listen(doc(db, 'config', 'usage_meta'), (s) => setUsageMeta(s.data() || null)),
       listen(query(collection(db, 'pos'), orderBy('createdAt', 'desc'), limit(200)), (s) => setPos(s.docs.map((d) => ({ id: d.id, ...d.data() })))),
       listen(collection(db, 'users'), (s) => setUsers(s.docs.map((d) => ({ id: d.id, ...d.data() })))),
       // การนำเข้าล่าสุดของแต่ละอาคาร (ไม่ต้องสร้าง index เพิ่ม)
@@ -63,7 +65,7 @@ export function DataProvider({ user, children }) {
   const value = {
     user, isAdmin: user.role === 'admin',
     loading: items === null,
-    rows, byBuilding, vendors, settings, backupInfo, taxonomy, brands, pos, users, lastImport,
+    rows, byBuilding, vendors, settings, backupInfo, taxonomy, usageMeta, brands, pos, users, lastImport,
     building, setBuilding,
     drafts, setDrafts, addToDraft,
   };
