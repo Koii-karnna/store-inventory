@@ -2,12 +2,14 @@ import { useMemo } from 'react';
 import { useData } from '../state.jsx';
 import { go, Empty } from '../ui.jsx';
 import { needsOrder, LEVELS, fmtDateTime } from '../lib/model.js';
+import { backupAgeDays, BACKUP_REMIND_DAYS } from './Backup.jsx';
 
 const SEGMENTS = ['out', 'low', 'near', 'ok', 'nomin', 'nodata'];
 const STALE_DAYS = 7;
 
 export default function Dashboard() {
-  const { byBuilding, building, taxonomy, lastImport, isAdmin } = useData();
+  const { byBuilding, building, taxonomy, lastImport, isAdmin, backupInfo } = useData();
+  const bAge = backupAgeDays(backupInfo);
   const rows = byBuilding[building];
   const active = rows.filter((r) => r.v.active);
 
@@ -93,6 +95,12 @@ export default function Dashboard() {
           {ageDays !== null && ageDays > STALE_DAYS && ` · เกิน ${STALE_DAYS} วันแล้ว ควรนำเข้าใหม่`}
         </div>
       </div>
+
+      {isAdmin && (bAge === null || bAge > BACKUP_REMIND_DAYS) && (
+        <p className="warn">
+          {bAge === null ? 'ยังไม่เคยสำรองข้อมูล' : `ไม่ได้สำรองข้อมูลมา ${Math.floor(bAge)} วันแล้ว`} — <a href="#/settings">ไปหน้าตั้งค่าเพื่อดาวน์โหลดไฟล์สำรอง →</a>
+        </p>
+      )}
 
       <div className="cards">
         {cards.map((c) => (

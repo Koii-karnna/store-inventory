@@ -19,6 +19,7 @@ export function DataProvider({ user, children }) {
   const [items, setItems] = useState(null);
   const [vendors, setVendors] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [backupInfo, setBackupInfo] = useState(null);
   const [taxonomy, setTaxonomy] = useState(null);
   const [brands, setBrands] = useState([]);
   const [pos, setPos] = useState([]);
@@ -33,6 +34,7 @@ export function DataProvider({ user, children }) {
       listen(collection(db, 'items'), (s) => setItems(s.docs.map((d) => ({ id: d.id, ...d.data() })))),
       listen(collection(db, 'vendors'), (s) => setVendors(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.name.localeCompare(b.name, 'th')))),
       listen(doc(db, 'settings', 'app'), (s) => setSettings({ ...DEFAULT_SETTINGS, ...(s.data() || {}) })),
+      listen(doc(db, 'settings', 'backup'), (s) => setBackupInfo(s.data() || null)),
       listen(doc(db, 'config', 'taxonomy'), (s) => setTaxonomy(s.data() || null)),
       listen(doc(db, 'config', 'brands'), (s) => setBrands(s.data()?.list || [])),
       listen(query(collection(db, 'pos'), orderBy('createdAt', 'desc'), limit(200)), (s) => setPos(s.docs.map((d) => ({ id: d.id, ...d.data() })))),
@@ -61,7 +63,7 @@ export function DataProvider({ user, children }) {
   const value = {
     user, isAdmin: user.role === 'admin',
     loading: items === null,
-    rows, byBuilding, vendors, settings, taxonomy, brands, pos, users, lastImport,
+    rows, byBuilding, vendors, settings, backupInfo, taxonomy, brands, pos, users, lastImport,
     building, setBuilding,
     drafts, setDrafts, addToDraft,
   };

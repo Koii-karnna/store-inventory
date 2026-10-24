@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useData } from '../state.jsx';
 import { AsyncButton, toast } from '../ui.jsx';
 import { commit } from '../lib/db.js';
+import Backup from './Backup.jsx';
 
 export default function Settings() {
   const { settings, user } = useData();
@@ -39,7 +40,8 @@ export default function Settings() {
         <label>ระดับ "ใกล้ Min" = คงเหลือไม่เกิน Min + <input className="num-input" type="number" min="0" max="200" value={form.nearPct} onChange={(e) => setForm({ ...form, nearPct: e.target.value })} /> %</label>
         <p className="muted small">ตัวอย่าง Min 10 และ 20% → คงเหลือ 11–12 = ใกล้ Min · 1–10 = ถึง Min · 0 = หมด · รายการที่ Min ว่างหรือเป็น 0 ถือว่า "ไม่มี Min" ไม่แจ้งเตือน</p>
       </section>
-      <AsyncButton className="btn btn-primary" onClick={save}>บันทึก</AsyncButton>
+      <AsyncButton className="btn btn-primary" onClick={save}>บันทึกการตั้งค่า</AsyncButton>
+      <Backup />
     </div>
   );
 }
