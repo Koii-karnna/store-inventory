@@ -39,7 +39,7 @@ code { background: var(--gray-soft); padding: 1px 5px; border-radius: 4px; }
 .small { font-size: 12.5px; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
 .nowrap { white-space: nowrap; }
-.t-red { color: var(--red); } .t-orange { color: var(--orange); }
+.t-red { color: var(--red); } .t-orange { color: var(--orange); } .t-green { color: var(--green); }
 .error { color: var(--red); background: var(--red-soft); padding: 8px 10px; border-radius: 8px; }
 .warn { color: #8a5300; background: var(--orange-soft); padding: 8px 10px; border-radius: 8px; }
 .note { background: var(--primary-soft); padding: 8px 10px; border-radius: 8px; }

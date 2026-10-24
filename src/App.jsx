@@ -143,8 +143,8 @@ export function Shell() {
 
   let page;
   if (loading) page = <div className="empty">กำลังโหลดข้อมูล…</div>;
-  else if (path === '/items') page = <Items params={params} />;
-  else if (path === '/alerts') page = <Items params={{ level: 'need', ...params }} alerts />;
+  else if (path === '/items') page = <Items key="items" params={params} />;
+  else if (path === '/alerts') page = <Items key="alerts" params={{ level: 'need', ...params }} alerts />;
   else if (path === '/po') page = <PurchaseOrders params={params} />;
   else if (path === '/mismatch') page = <Mismatch />;
   else if (path === '/usage') page = <Usage />;

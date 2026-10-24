@@ -4,6 +4,9 @@ import { go, LevelBadge, Badge, Thumb, Empty, toast, AsyncButton } from '../ui.j
 import { needsOrder, fmtNum, fmtIsoDateThai, LEVELS } from '../lib/model.js';
 import ItemDrawer from './ItemDrawer.jsx';
 import { getImage } from '../lib/db.js';
+import { useUsageStats } from '../lib/usageStore.js';
+import { assessItem, USAGE_RULES } from '../lib/usage.js';
+import { useOrderingQty } from './Usage.jsx';
 
 const LEVEL_FILTERS = [
   ['', 'ทุกระดับ'], ['need', 'ต้องสั่ง (หมด + ถึง Min)'], ['out', 'หมด'], ['low', 'ถึง Min'], ['near', 'ใกล้ Min'],
@@ -11,6 +14,27 @@ const LEVEL_FILTERS = [
 ];
 const LEVEL_ORDER = { out: 0, low: 1, near: 2, ok: 3, nomin: 4, pending: 5, nodata: 6, inactive: 7 };
 const PAGE = 300;
+
+const r1 = (n) => Math.round(n * 10) / 10;
+
+/** 3 ช่องข้อมูลการเบิก (หน้าแจ้งเตือน) */
+function UsageCells({ r, s, ordering, loading }) {
+  if (loading) return <><td className="num muted">…</td><td /><td /></>;
+  if (!s || s.unitMismatch) return <><td className="num muted small" colSpan={3}>{s?.unitMismatch ? 'หน่วยตอนเบิกไม่ตรง' : '–'}</td></>;
+  const { suggest } = assessItem(r, s, ordering);
+  const cover = s.monthsCover;
+  const plenty = cover !== null && cover >= 12 / s.freq; // ยังพอใช้เกิน 1 รอบสั่ง
+  return (
+    <>
+      <td className="num">{s.avg > 0 ? fmtNum(r1(s.avg)) : <span className="muted small">ไม่ถูกเบิก</span>}</td>
+      <td className="num">
+        {cover === null ? <span className="muted">–</span>
+          : <span className={cover < USAGE_RULES.leadMonths ? 't-red' : plenty ? 't-green' : ''} title={plenty ? 'ยังพอใช้เกิน 1 รอบสั่ง' : ''}><b>{fmtNum(r1(cover))}</b></span>}
+      </td>
+      <td className="num">{suggest === null ? '–' : <b>{fmtNum(suggest)}</b>}{ordering > 0 && <div className="muted small">กำลังสั่ง {ordering}</div>}</td>
+    </>
+  );
+}
 
 export default function Items({ params, alerts }) {
   const { byBuilding, building, taxonomy, vendors, isAdmin, addToDraft, drafts } = useData();
@@ -28,6 +52,11 @@ export default function Items({ params, alerts }) {
   const subs = useMemo(() => (taxonomy?.subs || []).filter((s) => !p.group || s.group === p.group), [taxonomy, p.group]);
   const subNames = useMemo(() => Object.fromEntries((taxonomy?.subs || []).map((s) => [s.code, s.name])), [taxonomy]);
   const usedBrands = useMemo(() => [...new Set(rows.map((r) => r.brand).filter(Boolean))].sort(), [rows]);
+  // หน้าแจ้งเตือน: แสดงข้อมูลจากการเบิกประกอบการตัดสินใจ
+  const usage = useUsageStats(building);
+  const orderingQty = useOrderingQty(building);
+  const showUsage = alerts && usage.hasData;
+  const ust = (r) => usage.result?.stats[r.id];
 
   const list = useMemo(() => {
     const q = p.q.trim().toLowerCase();
@@ -52,9 +81,10 @@ export default function Items({ params, alerts }) {
       name: (a, b) => a.v.name.localeCompare(b.v.name, 'th'),
       stock: (a, b) => (a.v.stock ?? -1) - (b.v.stock ?? -1),
       level: (a, b) => LEVEL_ORDER[a.lv] - LEVEL_ORDER[b.lv] || a.code.localeCompare(b.code),
+      cover: (a, b) => (ust(a)?.monthsCover ?? Infinity) - (ust(b)?.monthsCover ?? Infinity) || a.code.localeCompare(b.code),
     }[sort];
     return out.sort(cmp);
-  }, [rows, p.q, p.group, p.sub, p.brand, p.vendor, p.photo, p.level, status, sort]);
+  }, [rows, p.q, p.group, p.sub, p.brand, p.vendor, p.photo, p.level, status, sort, usage.result]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectable = (r) => isAdmin && r.v.active && r.inGenedia !== false;
   const inDraft = new Set((drafts[building] || []).map((l) => l.itemId));
@@ -192,6 +222,11 @@ export default function Items({ params, alerts }) {
                 {th('stock', 'คงเหลือ', 'num')}
                 <th className="num">Min</th>
                 <th className="num">Max</th>
+                {showUsage && <>
+                  <th className="num" title={`เฉลี่ย ${USAGE_RULES.windowMonths} เดือนล่าสุด`}>ใช้/เดือน</th>
+                  {th('cover', 'พอใช้ (ด.)', 'num')}
+                  <th className="num" title="Max เสนอ − คงเหลือ − กำลังสั่ง">ควรสั่ง<br />ตามการใช้</th>
+                </>}
                 {th('level', 'สถานะ')}
               </tr>
             </thead>
@@ -215,6 +250,7 @@ export default function Items({ params, alerts }) {
                   <td className="num"><b>{fmtNum(r.v.stock)}</b></td>
                   <td className="num">{fmtNum(r.v.min)}</td>
                   <td className="num">{fmtNum(r.v.max)}</td>
+                  {showUsage && <UsageCells r={r} s={ust(r)} ordering={orderingQty[r.id] || 0} loading={usage.loading} />}
                   <td>
                     <div className="badges">
                       <LevelBadge level={r.lv} />
