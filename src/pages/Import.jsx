@@ -15,6 +15,7 @@ const KIND_LABEL = {
   master: 'Master (ชื่อ/Group/หมวดย่อย/ยี่ห้อ ตามมาตรฐาน)',
   usageReport: 'Part Usage Report (การเบิกอะไหล่)',
   usageBaseline: 'ประวัติการเบิกที่ตรวจแล้ว (ตั้งต้น — แทนที่ข้อมูลการเบิกทั้งหมด)',
+  g1Usage: 'รายงานการใช้อะไหล่ระบบ G1 (เดิม) — ไม่ต้องนำเข้า',
   unknown: 'ไม่รู้จักไฟล์นี้',
 };
 const NOT_IN_MASTER = 'รหัสไม่อยู่ใน Master (เก็บเป็นประวัติ)';
@@ -39,7 +40,8 @@ export default function ImportPage() {
   const setBuilding = (name, b) => { setPlan(null); setFiles((fs) => fs.map((f) => (f.name === name ? { ...f, parsed: { ...f.parsed, building: b } } : f))); };
   const removeFile = (name) => { setPlan(null); setFiles((fs) => fs.filter((f) => f.name !== name)); };
 
-  const valid = files.filter((f) => f.parsed.kind !== 'unknown');
+  const valid = files.filter((f) => !['unknown', 'g1Usage'].includes(f.parsed.kind));
+  const hasG1 = files.some((f) => f.parsed.kind === 'g1Usage');
   const stores = valid.filter((f) => f.parsed.kind === 'store');
   const dupBuilding = ['CMC', 'NP'].find((b) => stores.filter((f) => f.parsed.building === b).length > 1);
   const hasMaster = valid.some((f) => f.parsed.kind === 'master');
@@ -154,7 +156,7 @@ export default function ImportPage() {
               {files.map((f) => (
                 <tr key={f.name}>
                   <td>{f.name}</td>
-                  <td className={f.parsed.kind === 'unknown' ? 't-red' : ''}>{KIND_LABEL[f.parsed.kind]}{f.error && ` (${f.error})`}</td>
+                  <td className={f.parsed.kind === 'unknown' ? 't-red' : f.parsed.kind === 'g1Usage' ? 't-orange' : ''}>{KIND_LABEL[f.parsed.kind]}{f.error && ` (${f.error})`}</td>
                   <td>
                     {f.parsed.kind === 'store' ? (
                       <select value={f.parsed.building || ''} onChange={(e) => setBuilding(f.name, e.target.value)}>
@@ -170,6 +172,12 @@ export default function ImportPage() {
               ))}
             </tbody>
           </table>
+          {hasG1 && (
+            <p className="warn">
+              ไฟล์ G1 (สรุปการใช้อะไหล่ 2023–2026) รวมอยู่ในไฟล์ <b>Usage_Reconciliation_2023-2026_…_v2.xlsx</b> แล้ว
+              (อยู่ในโฟลเดอร์ <b>Store Part list\Output</b>) พร้อมการปรับที่ตรวจสอบแล้ว — ให้นำเข้าไฟล์นั้นแทน ไฟล์ G1 จะไม่ถูกนำเข้า
+            </p>
+          )}
           {!taxonomy && !hasMaster && <p className="warn">ยังไม่เคยนำเข้าไฟล์ Master — ครั้งแรกควรใส่ไฟล์ Master ด้วย เพื่อตั้งต้น Group/หมวดย่อย/ยี่ห้อ</p>}
           {dupBuilding && <p className="error">มีไฟล์ Store Part List ของอาคาร {dupBuilding} มากกว่า 1 ไฟล์</p>}
           {missingBuilding && <p className="error">กรุณาเลือกอาคารของไฟล์ Store Part List</p>}

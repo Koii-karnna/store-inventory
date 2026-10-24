@@ -58,6 +58,9 @@ export function parseFile(fileName, wb) {
   if (head.includes('รหัส') && head.includes('คงเหลือ')) return parseStoreList(fileName, rows);
   if (head[0] === 'Part Code' && head.includes('Available')) return parseReport(rows);
   if (head[0] === 'Order No.' && head.includes('Part Issues Date')) return parseUsageReport(rows);
+  // รายงานการใช้อะไหล่ของระบบ G1 (เดิม) — รวมอยู่ในไฟล์ Usage_Reconciliation แล้ว ไม่นำเข้าตรง
+  const top = rows.slice(0, 6).flat().map(str);
+  if (top.some((s) => s.startsWith('สรุปการใช้อะไหล่')) && top.includes('เลขงาน')) return { kind: 'g1Usage', fileName };
   return { kind: 'unknown', fileName };
 }
 
