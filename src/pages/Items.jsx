@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../state.jsx';
-import { go, LevelBadge, Badge, Thumb, Empty, toast } from '../ui.jsx';
-import { needsOrder, fmtNum } from '../lib/model.js';
+import { go, LevelBadge, Badge, Thumb, Empty, toast, AsyncButton } from '../ui.jsx';
+import { needsOrder, fmtNum, fmtIsoDateThai, LEVELS } from '../lib/model.js';
 import ItemDrawer from './ItemDrawer.jsx';
 
 const LEVEL_FILTERS = [
@@ -67,6 +67,36 @@ export default function Items({ params, alerts }) {
   };
   const selectAllNeed = () => setSel(new Set(list.filter((r) => selectable(r) && needsOrder(r.lv, r) && !inDraft.has(r.id)).map((r) => r.id)));
 
+  const exportXlsx = async () => {
+    const vendorName = (id) => vendors.find((v) => v.id === id)?.name || '';
+    const filterText = [
+      p.q && `ค้นหา "${p.q}"`,
+      p.group && `Group ${p.group}`,
+      p.sub && `หมวดย่อย ${p.sub} ${subNames[p.sub] || ''}`.trim(),
+      p.level && LEVEL_FILTERS.find(([v]) => v === p.level)?.[1],
+      { active: 'ใช้งาน', inactive: 'ยกเลิกใช้งาน', all: 'ทุกสถานะ' }[status],
+      p.brand && `ยี่ห้อ ${p.brand}`,
+      p.vendor && `Vendor ${vendorName(p.vendor)}`,
+    ].filter(Boolean).join(' · ');
+    const out = list.map((r) => {
+      const vs = r.vendors || [];
+      const main = vs.find((v) => v.main) || vs[0];
+      return {
+        building: r.building, code: r.code, name: r.v.name, brand: r.brand || '', group: r.group || '',
+        sub: r.sub ? `${r.sub} ${subNames[r.sub] || ''}`.trim() : '', unit: r.v.unit,
+        stock: r.v.stock, min: r.v.min, max: r.v.max, price: r.v.price ? Math.round(r.v.price * 100) / 100 : null,
+        status: r.v.active ? 'ใช้งาน' : 'ยกเลิกใช้งาน', level: LEVELS[r.lv].label, ordering: r.ordering ? 'กำลังสั่ง' : '',
+        vendor: main ? vendorName(main.id) : '', vendorsOther: vs.filter((v) => v !== main).map((v) => vendorName(v.id)).join(', '),
+        lastInDate: fmtIsoDateThai(r.lastInDate), lastInQty: r.lastInQty ?? null, note: r.note || '',
+        genediaName: r.g?.name && r.g.name !== r.v.name ? r.g.name : '',
+        flags: [r.inGenedia === false && 'ไม่มีใน Genedia', !r.m && 'ไม่มีใน Master', r.review && 'รอตรวจ Group'].filter(Boolean).join(', '),
+        thumb: r.thumb,
+      };
+    });
+    const { buildItemsExcel, download } = await import('../lib/excel.js');
+    download(await buildItemsExcel({ building, filterText, rows: out }), `รายการอะไหล่_${building}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const th = (key, label, cls = '') => (
     <th className={`sortable ${cls}`} onClick={() => setSort(key)} aria-sort={sort === key ? 'ascending' : 'none'}>
       {label}{sort === key && ' ▾'}
@@ -78,7 +108,10 @@ export default function Items({ params, alerts }) {
     <div className="page">
       <div className="page-head">
         <h1>{alerts ? `แจ้งเตือนสั่งซื้อ อาคาร ${building}` : `รายการอะไหล่ อาคาร ${building}`}</h1>
-        <span className="muted">{list.length.toLocaleString('th-TH')} รายการ</span>
+        <div className="row-actions" style={{ marginTop: 0 }}>
+          <span className="muted">{list.length.toLocaleString('th-TH')} รายการ</span>
+          {list.length > 0 && <AsyncButton className="btn btn-sm" onClick={exportXlsx}>Export Excel</AsyncButton>}
+        </div>
       </div>
 
       <div className="filters">

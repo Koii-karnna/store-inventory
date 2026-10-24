@@ -182,6 +182,72 @@ export async function buildPoExcel({ building, date, project, lines, images, sub
   return wb.xlsx.writeBuffer();
 }
 
+const ITEM_COLS = [
+  { h: 'ลำดับ', k: 'no', w: 6 }, { h: 'รูป', k: 'img', w: 8 }, { h: 'อาคาร', k: 'building', w: 7 }, { h: 'รหัส', k: 'code', w: 16 },
+  { h: 'ชื่อ', k: 'name', w: 44 }, { h: 'ยี่ห้อ', k: 'brand', w: 14 }, { h: 'Group', k: 'group', w: 20 }, { h: 'หมวดย่อย', k: 'sub', w: 26 },
+  { h: 'หน่วย', k: 'unit', w: 8 }, { h: 'คงเหลือ', k: 'stock', w: 9, num: true }, { h: 'Min', k: 'min', w: 7, num: true }, { h: 'Max', k: 'max', w: 7, num: true },
+  { h: 'ราคา/หน่วย (Genedia)', k: 'price', w: 12, money: true }, { h: 'สถานะ', k: 'status', w: 12 }, { h: 'ระดับแจ้งเตือน', k: 'level', w: 13 },
+  { h: 'กำลังสั่ง', k: 'ordering', w: 10 }, { h: 'Vendor หลัก', k: 'vendor', w: 22 }, { h: 'Vendor อื่น', k: 'vendorsOther', w: 22 },
+  { h: 'วันที่รับเข้าล่าสุด', k: 'lastInDate', w: 14 }, { h: 'จำนวนรับเข้าล่าสุด', k: 'lastInQty', w: 10, num: true },
+  { h: 'หมายเหตุ', k: 'note', w: 30 }, { h: 'ชื่อใน Genedia', k: 'genediaName', w: 40 }, { h: 'หมายเหตุระบบ', k: 'flags', w: 22 },
+];
+
+/**
+ * รายการอะไหล่ตามตัวกรอง พร้อมรายละเอียดทั้งหมด (รูปเล็กจากตาราง)
+ * rows: [{...ค่าตาม ITEM_COLS, thumb}]
+ */
+export async function buildItemsExcel({ building, filterText, rows }) {
+  const ExcelJS = await loadExcelJS();
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(`รายการ ${building}`, {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  ws.columns = ITEM_COLS.map((c) => ({ width: c.w }));
+  const last = ITEM_COLS.length;
+  const line = (r, text, font) => {
+    ws.mergeCells(r, 1, r, 12);
+    ws.getCell(r, 1).value = text;
+    ws.getCell(r, 1).font = { name: FONT, ...font };
+  };
+  line(1, `รายการอะไหล่ อาคาร ${building}`, { size: 14, bold: true });
+  line(2, `ข้อมูล ณ ${fmtDateThai(new Date())} · ${rows.length.toLocaleString('th-TH')} รายการ`, { size: 10 });
+  line(3, `ตัวกรอง: ${filterText || 'ทั้งหมด'}`, { size: 10, color: { argb: 'FF555555' } });
+
+  const HEAD = 5;
+  ITEM_COLS.forEach((c, i) => {
+    const cell = ws.getCell(HEAD, i + 1);
+    cell.value = c.h;
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = BORDER;
+  });
+  ws.getRow(HEAD).height = 30;
+  ws.views = [{ state: 'frozen', ySplit: HEAD, xSplit: 4 }];
+  ws.autoFilter = { from: { row: HEAD, column: 1 }, to: { row: HEAD, column: last } };
+
+  rows.forEach((x, i) => {
+    const r = HEAD + 1 + i;
+    const row = ws.getRow(r);
+    ITEM_COLS.forEach((c, ci) => {
+      const cell = row.getCell(ci + 1);
+      cell.value = c.k === 'no' ? i + 1 : c.k === 'img' ? '' : x[c.k] ?? '';
+      cell.font = { name: FONT, size: 10 };
+      cell.border = BORDER;
+      cell.alignment = { vertical: 'middle', wrapText: ['name', 'sub', 'note', 'genediaName', 'vendorsOther'].includes(c.k), horizontal: c.num || c.k === 'no' ? 'center' : undefined };
+      if (c.money) cell.numFmt = '#,##0.00';
+    });
+    row.height = x.thumb ? 40 : 20;
+    if (x.thumb) {
+      const id = wb.addImage({ base64: x.thumb, extension: 'jpeg' });
+      const { w, h } = jpegSize(x.thumb) || { w: 1, h: 1 };
+      const s = Math.min(48 / w, 48 / h);
+      ws.addImage(id, { tl: { col: 1.1, row: r - 1 + 0.08 }, ext: { width: Math.round(w * s), height: Math.round(h * s) }, editAs: 'oneCell' });
+    }
+  });
+  return wb.xlsx.writeBuffer();
+}
+
 /** รายการที่ต้องไปแก้ใน Genedia */
 export async function buildMismatchExcel(rows, building) {
   const ExcelJS = await loadExcelJS();
