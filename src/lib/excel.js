@@ -183,7 +183,7 @@ export async function buildPoExcel({ building, date, project, lines, images, sub
 }
 
 const ITEM_COLS = [
-  { h: 'ลำดับ', k: 'no', w: 6 }, { h: 'รูป', k: 'img', w: 8 }, { h: 'อาคาร', k: 'building', w: 7 }, { h: 'รหัส', k: 'code', w: 16 },
+  { h: 'ลำดับ', k: 'no', w: 6 }, { h: 'รูป', k: 'img', w: 14 }, { h: 'อาคาร', k: 'building', w: 7 }, { h: 'รหัส', k: 'code', w: 16 },
   { h: 'ชื่อ', k: 'name', w: 44 }, { h: 'ยี่ห้อ', k: 'brand', w: 14 }, { h: 'Group', k: 'group', w: 20 }, { h: 'หมวดย่อย', k: 'sub', w: 26 },
   { h: 'หน่วย', k: 'unit', w: 8 }, { h: 'คงเหลือ', k: 'stock', w: 9, num: true }, { h: 'Min', k: 'min', w: 7, num: true }, { h: 'Max', k: 'max', w: 7, num: true },
   { h: 'ราคา/หน่วย (Genedia)', k: 'price', w: 12, money: true }, { h: 'สถานะ', k: 'status', w: 12 }, { h: 'ระดับแจ้งเตือน', k: 'level', w: 13 },
@@ -193,10 +193,10 @@ const ITEM_COLS = [
 ];
 
 /**
- * รายการอะไหล่ตามตัวกรอง พร้อมรายละเอียดทั้งหมด (รูปเล็กจากตาราง)
- * rows: [{...ค่าตาม ITEM_COLS, thumb}]
+ * รายการอะไหล่ตามตัวกรอง พร้อมรายละเอียดทั้งหมด (รูปขนาดเดียวกับใบขอซื้อ)
+ * rows: [{...ค่าตาม ITEM_COLS, itemId, thumb}] · images: { [itemId]: dataURL } (ไม่มี → ใช้ thumb)
  */
-export async function buildItemsExcel({ building, filterText, rows }) {
+export async function buildItemsExcel({ building, filterText, rows, images = {} }) {
   const ExcelJS = await loadExcelJS();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(`รายการ ${building}`, {
@@ -237,12 +237,13 @@ export async function buildItemsExcel({ building, filterText, rows }) {
       cell.alignment = { vertical: 'middle', wrapText: ['name', 'sub', 'note', 'genediaName', 'vendorsOther'].includes(c.k), horizontal: c.num || c.k === 'no' ? 'center' : undefined };
       if (c.money) cell.numFmt = '#,##0.00';
     });
-    row.height = x.thumb ? 40 : 20;
-    if (x.thumb) {
-      const id = wb.addImage({ base64: x.thumb, extension: 'jpeg' });
-      const { w, h } = jpegSize(x.thumb) || { w: 1, h: 1 };
-      const s = Math.min(48 / w, 48 / h);
-      ws.addImage(id, { tl: { col: 1.1, row: r - 1 + 0.08 }, ext: { width: Math.round(w * s), height: Math.round(h * s) }, editAs: 'oneCell' });
+    const img = images[x.itemId] || x.thumb;
+    row.height = img ? 66 : 20;
+    if (img) {
+      const id = wb.addImage({ base64: img, extension: 'jpeg' });
+      const { w, h } = jpegSize(img) || { w: 1, h: 1 };
+      const s = Math.min(IMG_BOX / w, IMG_BOX / h);
+      ws.addImage(id, { tl: { col: 1.08, row: r - 1 + 0.06 }, ext: { width: Math.round(w * s), height: Math.round(h * s) }, editAs: 'oneCell' });
     }
   });
   return wb.xlsx.writeBuffer();

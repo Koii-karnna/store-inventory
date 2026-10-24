@@ -3,6 +3,7 @@ import { useData } from '../state.jsx';
 import { go, LevelBadge, Badge, Thumb, Empty, toast, AsyncButton } from '../ui.jsx';
 import { needsOrder, fmtNum, fmtIsoDateThai, LEVELS } from '../lib/model.js';
 import ItemDrawer from './ItemDrawer.jsx';
+import { getImage } from '../lib/db.js';
 
 const LEVEL_FILTERS = [
   ['', 'ทุกระดับ'], ['need', 'ต้องสั่ง (หมด + ถึง Min)'], ['out', 'หมด'], ['low', 'ถึง Min'], ['near', 'ใกล้ Min'],
@@ -90,11 +91,20 @@ export default function Items({ params, alerts }) {
         lastInDate: fmtIsoDateThai(r.lastInDate), lastInQty: r.lastInQty ?? null, note: r.note || '',
         genediaName: r.g?.name && r.g.name !== r.v.name ? r.g.name : '',
         flags: [r.inGenedia === false && 'ไม่มีใน Genedia', !r.m && 'ไม่มีใน Master', r.review && 'รอตรวจ Group'].filter(Boolean).join(', '),
-        thumb: r.thumb,
+        itemId: r.id, thumb: r.thumb,
       };
     });
+    // รูปขนาดเต็ม (เท่าใบขอซื้อ) โหลดทีละ 20 รูป
+    const images = {};
+    const withImg = list.filter((r) => r.hasImage);
+    for (let i = 0; i < withImg.length; i += 20) {
+      await Promise.all(withImg.slice(i, i + 20).map(async (r) => {
+        const d = await getImage(r.id).catch(() => null);
+        if (d) images[r.id] = d;
+      }));
+    }
     const { buildItemsExcel, download } = await import('../lib/excel.js');
-    download(await buildItemsExcel({ building, filterText, rows: out }), `รายการอะไหล่_${building}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    download(await buildItemsExcel({ building, filterText, rows: out, images }), `รายการอะไหล่_${building}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const th = (key, label, cls = '') => (
