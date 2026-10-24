@@ -25,6 +25,7 @@ export default function Items({ params, alerts }) {
   const rows = byBuilding[building];
   const groups = useMemo(() => [...new Set(rows.map((r) => r.group).filter(Boolean))].sort(), [rows]);
   const subs = useMemo(() => (taxonomy?.subs || []).filter((s) => !p.group || s.group === p.group), [taxonomy, p.group]);
+  const subNames = useMemo(() => Object.fromEntries((taxonomy?.subs || []).map((s) => [s.code, s.name])), [taxonomy]);
   const usedBrands = useMemo(() => [...new Set(rows.map((r) => r.brand).filter(Boolean))].sort(), [rows]);
 
   const list = useMemo(() => {
@@ -155,16 +156,21 @@ export default function Items({ params, alerts }) {
                   <td className="mono nowrap">{r.code}</td>
                   <td className="name-cell">{r.v.name}</td>
                   <td>{r.brand || <span className="muted">–</span>}</td>
-                  <td className="small">{r.group || <span className="t-orange">ไม่ระบุ</span>}{r.sub && <div className="muted mono">{r.sub}</div>}</td>
+                  <td className="small">
+                    {r.group || <span className="t-orange">ไม่ระบุ</span>}
+                    {r.sub && <div className="muted sub-name" title={r.sub}>{subNames[r.sub] || r.sub}</div>}
+                  </td>
                   <td>{r.v.unit}</td>
                   <td className="num"><b>{fmtNum(r.v.stock)}</b></td>
                   <td className="num">{fmtNum(r.v.min)}</td>
                   <td className="num">{fmtNum(r.v.max)}</td>
-                  <td className="badges">
-                    <LevelBadge level={r.lv} />
-                    {r.ordering && <Badge color="blue">กำลังสั่ง</Badge>}
-                    {inDraft.has(r.id) && <Badge color="blue-soft">ในใบร่าง</Badge>}
-                    {r.review && <Badge color="orange-soft">รอตรวจ Group</Badge>}
+                  <td>
+                    <div className="badges">
+                      <LevelBadge level={r.lv} />
+                      {r.ordering && <Badge color="blue">กำลังสั่ง</Badge>}
+                      {inDraft.has(r.id) && <Badge color="blue-soft">ในใบร่าง</Badge>}
+                      {r.review && <Badge color="orange-soft">รอตรวจ Group</Badge>}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -170,6 +170,7 @@ th.sortable:hover { color: var(--text); }
 .chk { width: 36px; text-align: center !important; }
 .name-cell { min-width: 260px; }
 .badges { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.sub-name { font-size: 12px; line-height: 1.35; max-width: 220px; }
 .group-row td { background: var(--primary-soft); font-weight: 600; color: var(--primary); }
 .sub-row td { background: var(--surface-2); font-weight: 600; font-size: 13px; padding-left: 24px !important; }
 .more { margin: 12px auto; display: flex; }
