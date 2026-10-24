@@ -57,6 +57,19 @@ GitHub → repo `store-inventory` → **Settings → Pages → Build and deploym
 
 เปิดเว็บ → หน้าแรกจะให้ **สร้าง Admin คนแรก** (ทำได้ครั้งเดียว ควรทำทันที) → จากนั้นนำเข้าไฟล์ Genedia **พร้อมไฟล์ Master** ในครั้งแรก
 
+## ลืมรหัสผ่าน
+
+**ผู้ใช้ทั่วไป / Admin ที่ยังมี Admin คนอื่น** (Admin อีกคนทำให้)
+1. เว็บ → เมนู **ผู้ใช้** → **ปิดบัญชี** คนที่ลืม
+2. Firebase Console → **Authentication → Users** → ค้นหา `username@store-inventory.local` → ⋮ → **Delete account**
+3. เว็บ → **+ เพิ่มผู้ใช้** ด้วย Username เดิม และรหัสผ่านใหม่ (เลือกสิทธิ์เดิม)
+
+**Admin คนเดียวในระบบลืมรหัสผ่าน** (ทำใน Firebase Console ทั้งหมด)
+1. **Authentication → Users** → ลบบัญชีเดิม → **Add user** ใส่ `username@store-inventory.local` และรหัสผ่านใหม่ → คัดลอก **User UID**
+2. **Firestore Database → Data → users** → **Add document** → Document ID = UID ที่คัดลอก → เพิ่มช่อง `username` (string), `name` (string), `role` = `admin` (string), `active` = `true` (boolean)
+
+> แนะนำให้มี Admin อย่างน้อย 2 คน จะได้ไม่ต้องใช้วิธีที่ 2
+
 ## การอัปเดตเว็บครั้งต่อไป
 
 แก้โค้ด → GitHub Desktop: **Commit to main** → **Push origin** → เว็บอัปเดตเองใน 1–2 นาที
