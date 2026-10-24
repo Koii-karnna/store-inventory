@@ -26,6 +26,7 @@ export default function Dashboard() {
     { label: 'กำลังสั่ง', n: rows.filter((r) => r.ordering).length, to: { level: 'ordering' } },
     { label: 'รอตรวจ Group', n: rows.filter((r) => r.review).length, to: { level: 'review' } },
     { label: 'รอเพิ่มใน Genedia', n: rows.filter((r) => r.lv === 'pending').length, to: { level: 'pending' } },
+    { label: 'ยังไม่มีรูป', n: active.filter((r) => !r.hasImage).length, to: { photo: 'none' } },
   ];
 
   const byGroup = useMemo(() => {

@@ -19,7 +19,7 @@ export default function Items({ params, alerts }) {
   const [sort, setSort] = useState(alerts ? 'level' : 'code');
   const [shown, setShown] = useState(PAGE);
   const base = alerts ? '/alerts' : '/items';
-  const p = { q: '', group: '', sub: '', level: '', status: '', brand: '', vendor: '', ...params };
+  const p = { q: '', group: '', sub: '', level: '', status: '', brand: '', vendor: '', photo: '', ...params };
   const status = p.status || (['review', 'nodata', 'ordering', 'pending'].includes(p.level) ? 'all' : 'active');
   const set = (k, v) => { setShown(PAGE); go(base, { ...params, [k]: v, ...(k === 'group' ? { sub: '' } : {}) }); };
 
@@ -38,6 +38,8 @@ export default function Items({ params, alerts }) {
       if (p.sub && r.sub !== p.sub) return false;
       if (p.brand && r.brand !== p.brand) return false;
       if (p.vendor && !(r.vendors || []).some((v) => v.id === p.vendor)) return false;
+      if (p.photo === 'none' && r.hasImage) return false;
+      if (p.photo === 'has' && !r.hasImage) return false;
       if (p.level === 'need' && !needsOrder(r.lv, r)) return false;
       if (p.level === 'ordering' && !r.ordering) return false;
       if (p.level === 'review' && !r.review) return false;
@@ -52,7 +54,7 @@ export default function Items({ params, alerts }) {
       level: (a, b) => LEVEL_ORDER[a.lv] - LEVEL_ORDER[b.lv] || a.code.localeCompare(b.code),
     }[sort];
     return out.sort(cmp);
-  }, [rows, p.q, p.group, p.sub, p.brand, p.vendor, p.level, status, sort]);
+  }, [rows, p.q, p.group, p.sub, p.brand, p.vendor, p.photo, p.level, status, sort]);
 
   const selectable = (r) => isAdmin && r.v.active && r.inGenedia !== false;
   const inDraft = new Set((drafts[building] || []).map((l) => l.itemId));
@@ -78,6 +80,7 @@ export default function Items({ params, alerts }) {
       { active: 'ใช้งาน', inactive: 'ยกเลิกใช้งาน', all: 'ทุกสถานะ' }[status],
       p.brand && `ยี่ห้อ ${p.brand}`,
       p.vendor && `Vendor ${vendorName(p.vendor)}`,
+      { none: 'ยังไม่มีรูป', has: 'มีรูปแล้ว' }[p.photo],
     ].filter(Boolean).join(' · ');
     const out = list.map((r) => {
       const vs = r.vendors || [];
@@ -147,6 +150,11 @@ export default function Items({ params, alerts }) {
         <select value={p.brand} onChange={(e) => set('brand', e.target.value)} aria-label="ยี่ห้อ">
           <option value="">ทุกยี่ห้อ</option>
           {usedBrands.map((b) => <option key={b}>{b}</option>)}
+        </select>
+        <select value={p.photo} onChange={(e) => set('photo', e.target.value)} aria-label="รูป">
+          <option value="">รูป: ทั้งหมด</option>
+          <option value="none">ยังไม่มีรูป</option>
+          <option value="has">มีรูปแล้ว</option>
         </select>
         {vendors.length > 0 && (
           <select value={p.vendor} onChange={(e) => set('vendor', e.target.value)} aria-label="Vendor">
