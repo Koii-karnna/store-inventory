@@ -67,8 +67,12 @@ input:disabled, select:disabled, textarea:disabled { background: var(--surface-2
 .form { display: grid; gap: 12px; }
 .form label, .form .field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .form label > input, .form label > select, .form label > textarea { color: var(--text); font-size: 14px; }
+.field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 label.inline { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
 .num-input { width: 90px; text-align: right; padding: 5px 8px; }
+.note-input { width: 160px; padding: 5px 8px; }
+.project-field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); max-width: 640px; }
+.project-field input { color: var(--text); font-size: 14px; }
 .row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 td.row-actions { margin: 0; }
 

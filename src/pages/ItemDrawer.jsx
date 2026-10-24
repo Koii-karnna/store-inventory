@@ -34,7 +34,12 @@ export default function ItemDrawer({ item, onClose }) {
 
   const save = async () => {
     const brand = form.brand.trim().toUpperCase() || null;
-    const patch = { group: form.group || null, sub: item.building === 'CMC' ? form.sub || null : null, brand, note: form.note.trim(), vendors: form.vendors };
+    const lastInQty = form.lastInQty === '' ? null : Number(form.lastInQty);
+    if (lastInQty !== null && !(lastInQty >= 0)) throw new Error('จำนวนที่รับเข้าล่าสุดต้องเป็นตัวเลข');
+    const patch = {
+      group: form.group || null, sub: item.building === 'CMC' ? form.sub || null : null, brand, note: form.note.trim(), vendors: form.vendors,
+      lastInDate: form.lastInDate || null, lastInQty,
+    };
     if (patch.group && item.review) patch.review = false;
     const changed = await updateItem(user, item, patch);
     if (brand && !brands.includes(brand)) {
@@ -159,6 +164,10 @@ export default function ItemDrawer({ item, onClose }) {
             )}
             {isAdmin && vendors.length === 0 && <span className="muted small">ยังไม่มี Vendor ในระบบ — เพิ่มที่เมนู Vendor</span>}
           </div>
+          <div className="field-pair">
+            <label>วันที่รับเข้าล่าสุด<input type="date" value={form.lastInDate} onChange={f('lastInDate')} disabled={!isAdmin} /></label>
+            <label>จำนวนที่รับเข้าล่าสุด{item.v.unit && ` (${item.v.unit})`}<input type="number" min="0" value={form.lastInQty} onChange={f('lastInQty')} disabled={!isAdmin} /></label>
+          </div>
           <label>หมายเหตุ<textarea rows={3} value={form.note} onChange={f('note')} disabled={!isAdmin} /></label>
         </div>
         {isAdmin && (
@@ -188,5 +197,8 @@ export default function ItemDrawer({ item, onClose }) {
 }
 
 function pick(item) {
-  return { group: item.group || '', sub: item.sub || '', brand: item.brand || '', note: item.note || '', vendors: item.vendors || [] };
+  return {
+    group: item.group || '', sub: item.sub || '', brand: item.brand || '', note: item.note || '', vendors: item.vendors || [],
+    lastInDate: item.lastInDate || '', lastInQty: item.lastInQty ?? '',
+  };
 }

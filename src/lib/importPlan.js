@@ -8,6 +8,7 @@ export const FIELD_LABELS = {
   g: 'ข้อมูล Genedia', m: 'ข้อมูล Master',
   group: 'Group', sub: 'หมวดย่อย', brand: 'ยี่ห้อ', note: 'หมายเหตุ', review: 'รอตรวจ Group',
   inGenedia: 'อยู่ใน Genedia', ordering: 'กำลังสั่ง', vendors: 'Vendor', image: 'รูป',
+  lastInDate: 'วันที่รับเข้าล่าสุด', lastInQty: 'จำนวนที่รับเข้าล่าสุด',
 };
 
 const G_FIELDS = ['name', 'active', 'unit', 'group', 'stock', 'min', 'max', 'cost', 'price'];

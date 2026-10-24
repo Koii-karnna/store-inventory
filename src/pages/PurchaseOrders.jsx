@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { doc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase.js';
-import { useData } from '../state.jsx';
+import { useData, useLocal } from '../state.jsx';
 import { go, Thumb, Empty, Badge, AsyncButton, toast } from '../ui.jsx';
-import { suggestQty, fmtNum, fmtDateTime } from '../lib/model.js';
+import { suggestQty, fmtNum, fmtDateTime, fmtLastIn } from '../lib/model.js';
 import { commit, getImage } from '../lib/db.js';
 import { buildPoExcel, download, groupLines } from '../lib/excel.js';
 
@@ -41,12 +41,20 @@ const useSubNames = () => {
 function Draft() {
   const { building, drafts, setDrafts, byBuilding, isAdmin, user } = useData();
   const subNames = useSubNames();
+  const [projects, setProjects] = useLocal(`si.poProject.${user.uid}`, { CMC: '', NP: '' });
+  const project = projects[building] || '';
   const rowsById = useMemo(() => Object.fromEntries(byBuilding[building].map((r) => [r.id, r])), [byBuilding, building]);
   const draft = (drafts[building] || []).filter((l) => rowsById[l.itemId]);
   const lines = draft.map((l) => {
     const it = rowsById[l.itemId];
-    // ราคาตั้งต้น = ราคา/หน่วย จาก Genedia (แก้ได้)
-    return { ...l, it, qty: l.qty ?? suggestQty(it), price: l.price ?? (it.v.price ? Math.round(it.v.price * 100) / 100 : null) };
+    // ค่าตั้งต้น (แก้ได้): ราคา = ราคา/หน่วย จาก Genedia · หมายเหตุ = หมายเหตุของรายการ
+    return {
+      ...l, it,
+      qty: l.qty ?? suggestQty(it),
+      price: l.price ?? (it.v.price ? Math.round(it.v.price * 100) / 100 : null),
+      note: l.note ?? (it.note || ''),
+      lastIn: fmtLastIn(it, it.v.unit),
+    };
   });
   const sections = groupLines(lines, (l) => l.it.group, (l) => l.it.sub, (l) => l.it.code);
   const total = lines.reduce((s, l) => s + (l.price ? l.qty * l.price : 0), 0);
@@ -60,16 +68,16 @@ function Draft() {
     const already = lines.filter((l) => l.it.ordering);
     if (already.length && !confirm(`มี ${already.length} รายการที่ "กำลังสั่ง" อยู่แล้ว ต้องการสั่งซ้ำหรือไม่?`)) return;
     const now = new Date();
-    const snapshot = lines.map(({ it, qty, price }) => ({
+    const snapshot = lines.map(({ it, qty, price, note, lastIn }) => ({
       itemId: it.id, code: it.code, name: it.v.name, brand: it.brand || '', unit: it.v.unit, stock: it.v.stock,
-      min: it.v.min, max: it.v.max, group: it.group || '', sub: it.sub || '', qty, price: price ?? null,
+      min: it.v.min, max: it.v.max, group: it.group || '', sub: it.sub || '', lastIn, qty, price: price ?? null, note: note.trim(),
     }));
     const images = await loadImages(snapshot.map((l) => l.itemId));
-    const buf = await buildPoExcel({ building, date: now, lines: snapshot, images, subNames });
+    const buf = await buildPoExcel({ building, date: now, project, lines: snapshot, images, subNames });
 
     const poId = doc(collection(db, 'pos')).id;
     const ops = [
-      { type: 'set', path: ['pos', poId], data: { building, createdAt: serverTimestamp(), createdBy: user.uid, createdByName: user.name, status: 'ordering', lines: snapshot, total } },
+      { type: 'set', path: ['pos', poId], data: { building, createdAt: serverTimestamp(), createdBy: user.uid, createdByName: user.name, status: 'ordering', project: project.trim(), lines: snapshot, total } },
       ...snapshot.map((l) => ({ type: 'update', path: ['items', l.itemId], data: { ordering: { poId, at: now, stockAtOrder: l.stock ?? 0 } } })),
     ];
     const logs = [
@@ -79,6 +87,7 @@ function Draft() {
     await commit(user, ops, logs);
     download(buf, fileName(building, now));
     setDrafts((d) => ({ ...d, [building]: [] }));
+    setProjects((p) => ({ ...p, [building]: '' }));
     toast('Export ใบขอซื้อแล้ว รายการถูกติดป้าย "กำลังสั่ง"');
   };
 
@@ -87,20 +96,23 @@ function Draft() {
   }
   return (
     <>
-      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ · ราคา/หน่วย ตั้งต้นจาก Genedia (ช่องว่าง = Genedia ไม่มีราคา) · แก้ได้ทั้งสองช่อง · ไม่รวม VAT</p>
+      <label className="project-field">โครงการ / วัตถุประสงค์
+        <input value={project} onChange={(e) => setProjects((p) => ({ ...p, [building]: e.target.value }))} disabled={!isAdmin} placeholder="เช่น สำรองอะไหล่ประจำไตรมาส 4/2569" />
+      </label>
+      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ · ราคา/หน่วย ตั้งต้นจาก Genedia (ช่องว่าง = Genedia ไม่มีราคา) · หมายเหตุตั้งต้นจากหมายเหตุของรายการ · แก้ได้ทุกช่อง · ไม่รวม VAT</p>
       <div className="table-wrap">
         <table className="table po-table">
           <thead>
             <tr>
               <th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>ยี่ห้อ</th><th>หน่วย</th><th className="num">คงเหลือ</th>
-              <th className="num">Min/Max</th><th className="num">จำนวนสั่ง</th><th className="num">ราคา/หน่วย</th><th className="num">รวม</th><th />
+              <th className="num">Min/Max</th><th>รับเข้าล่าสุด</th><th className="num">จำนวนสั่ง</th><th className="num">ราคา/หน่วย</th><th className="num">รวม</th><th>หมายเหตุ</th><th />
             </tr>
           </thead>
           {sections.map(({ group, subs }) => (
             <tbody key={group}>
-              <tr className="group-row"><td colSpan={11}>{group}</td></tr>
+              <tr className="group-row"><td colSpan={13}>{group}</td></tr>
               {subs.flatMap(({ sub, items }) => [
-                sub !== null && <tr key={`sub-${sub}`} className="sub-row"><td colSpan={11}><span className="mono">{sub || '–'}</span> {subNames[sub] || (sub ? '' : 'ไม่ระบุหมวดย่อย')}</td></tr>,
+                sub !== null && <tr key={`sub-${sub}`} className="sub-row"><td colSpan={13}><span className="mono">{sub || '–'}</span> {subNames[sub] || (sub ? '' : 'ไม่ระบุหมวดย่อย')}</td></tr>,
                 ...items.map((l) => (
                 <tr key={l.itemId}>
                   <td><Thumb src={l.it.thumb} /></td>
@@ -110,9 +122,11 @@ function Draft() {
                   <td>{l.it.v.unit}</td>
                   <td className="num">{fmtNum(l.it.v.stock)}</td>
                   <td className="num">{fmtNum(l.it.v.min)}/{fmtNum(l.it.v.max)}</td>
+                  <td className="small nowrap">{l.lastIn || <span className="muted">–</span>}</td>
                   <td className="num"><input className="num-input" type="number" min="1" value={l.qty ?? ''} disabled={!isAdmin} onChange={(e) => setLine(l.itemId, { qty: numOrNull(e.target.value) })} aria-label="จำนวนสั่ง" /></td>
                   <td className="num"><input className="num-input" type="number" min="0" step="0.01" value={l.price ?? ''} placeholder="0.00" disabled={!isAdmin} onChange={(e) => setLine(l.itemId, { price: numOrNull(e.target.value) })} aria-label="ราคาต่อหน่วย" /></td>
                   <td className="num">{l.price ? fmtNum(l.qty * l.price) : '–'}</td>
+                  <td><input className="note-input" value={l.note} disabled={!isAdmin} onChange={(e) => setLine(l.itemId, { note: e.target.value })} aria-label="หมายเหตุ" /></td>
                   <td>{isAdmin && <button className="icon-btn" onClick={() => remove(l.itemId)} aria-label="เอาออก">✕</button>}</td>
                 </tr>
                 )),
@@ -120,7 +134,7 @@ function Draft() {
             </tbody>
           ))}
           <tfoot>
-            <tr><td colSpan={9} className="num"><b>รวมทั้งสิ้น (ไม่รวม VAT)</b></td><td className="num"><b>{fmtNum(total)}</b></td><td /></tr>
+            <tr><td colSpan={10} className="num"><b>รวมทั้งสิ้น (ไม่รวม VAT)</b></td><td className="num"><b>{fmtNum(total)}</b></td><td colSpan={2} /></tr>
           </tfoot>
         </table>
       </div>
@@ -143,7 +157,7 @@ function History() {
   const redownload = async (po) => {
     const images = await loadImages(po.lines.map((l) => l.itemId));
     const date = po.createdAt?.toDate?.() || new Date();
-    download(await buildPoExcel({ building: po.building, date, lines: po.lines, images, subNames }), fileName(po.building, date));
+    download(await buildPoExcel({ building: po.building, date, project: po.project, lines: po.lines, images, subNames }), fileName(po.building, date));
   };
 
   // ไม่อนุมัติ / ปิดใบ: ปลดป้าย "กำลังสั่ง" ของรายการที่ยังผูกกับใบนี้

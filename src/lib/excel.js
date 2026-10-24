@@ -39,10 +39,12 @@ function jpegSize(dataUrl) {
 }
 
 const COLS = [
-  { h: 'ลำดับ', w: 7 }, { h: 'รูป', w: 14 }, { h: 'รหัส', w: 17 }, { h: 'ชื่อ', w: 48 }, { h: 'ยี่ห้อ', w: 14 },
-  { h: 'หน่วย', w: 8 }, { h: 'คงเหลือ', w: 9 }, { h: 'Min/Max', w: 10 }, { h: 'จำนวนสั่ง', w: 10 },
-  { h: 'ราคา/หน่วย', w: 12 }, { h: 'รวม', w: 14 },
+  { h: 'ลำดับ', w: 6 }, { h: 'รูป', w: 14 }, { h: 'รหัส', w: 16 }, { h: 'ชื่อ', w: 40 }, { h: 'ยี่ห้อ', w: 13 },
+  { h: 'หน่วย', w: 7 }, { h: 'คงเหลือ', w: 8 }, { h: 'Min/Max', w: 9 }, { h: 'รับเข้าล่าสุด\n(วันที่ / จำนวน)', w: 15 },
+  { h: 'จำนวนสั่ง', w: 9 }, { h: 'ราคา/หน่วย', w: 11 }, { h: 'รวม', w: 13 }, { h: 'หมายเหตุ', w: 22 },
 ];
+const C = { qty: 10, price: 11, total: 12, note: 13 };
+const L = (col) => String.fromCharCode(64 + col); // 10 → J
 
 /**
  * จัดรายการเป็น Group → หมวดย่อย (เรียงตามรหัสหมวดย่อย)
@@ -70,11 +72,11 @@ export function groupLines(lines, groupOf = (l) => l.group, subOf = (l) => l.sub
 }
 
 /**
- * ใบขอสั่งซื้อ: หัวเอกสาร + แยกหัวข้อตาม Group และหมวดย่อย, ไม่รวม VAT
- * lines: [{code,name,brand,unit,stock,min,max,group,sub,qty,price}]
+ * ใบขอสั่งซื้อ: หัวเอกสาร + โครงการ/วัตถุประสงค์ + แยกหัวข้อตาม Group และหมวดย่อย + ช่องลงนามผู้ขอซื้อ, ไม่รวม VAT
+ * lines: [{code,name,brand,unit,stock,min,max,group,sub,lastIn,qty,price,note}]
  * images: { [itemId]: dataURL } · subNames: { [หมวดย่อย]: ชื่อ }
  */
-export async function buildPoExcel({ building, date, lines, images, subNames }) {
+export async function buildPoExcel({ building, date, project, lines, images, subNames }) {
   const ExcelJS = await loadExcelJS();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ใบขอสั่งซื้อ', {
@@ -91,8 +93,13 @@ export async function buildPoExcel({ building, date, lines, images, subNames }) 
   ws.getCell(2, 1).value = `วันที่ ${fmtDateThai(date)}`;
   ws.getCell(2, 1).font = { name: FONT, size: 11 };
   ws.getCell(2, 1).alignment = { horizontal: 'center' };
+  ws.mergeCells(3, 1, 3, last);
+  ws.getCell(3, 1).value = `โครงการ / วัตถุประสงค์: ${project?.trim() || '.'.repeat(120)}`;
+  ws.getCell(3, 1).font = { name: FONT, size: 11 };
+  ws.getRow(3).height = 20;
 
-  const head = ws.getRow(4);
+  const HEAD = 5;
+  const head = ws.getRow(HEAD);
   COLS.forEach((c, i) => {
     const cell = head.getCell(i + 1);
     cell.value = c.h;
@@ -101,11 +108,11 @@ export async function buildPoExcel({ building, date, lines, images, subNames }) 
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
     cell.border = BORDER;
   });
-  head.height = 22;
-  ws.views = [{ state: 'frozen', ySplit: 4 }];
-  ws.pageSetup.printTitlesRow = '4:4';
+  head.height = 32;
+  ws.views = [{ state: 'frozen', ySplit: HEAD }];
+  ws.pageSetup.printTitlesRow = `${HEAD}:${HEAD}`;
 
-  let r = 5, no = 1;
+  let r = HEAD + 1, no = 1;
   const totalCells = [];
   const header = (text, argb, size) => {
     ws.mergeCells(r, 1, r, last);
@@ -120,17 +127,18 @@ export async function buildPoExcel({ building, date, lines, images, subNames }) 
   const writeLine = (l) => {
     const row = ws.getRow(r);
     const minmax = `${l.min ?? '-'}/${l.max ?? '-'}`;
-    const vals = [no++, '', l.code, l.name, l.brand || '', l.unit || '', l.stock ?? '', minmax, l.qty || '', l.price ?? '', null];
+    const vals = [no++, '', l.code, l.name, l.brand || '', l.unit || '', l.stock ?? '', minmax, l.lastIn || '', l.qty || '', l.price ?? '', null, l.note || ''];
     vals.forEach((v, i) => { row.getCell(i + 1).value = v; });
-    row.getCell(11).value = { formula: `IF(OR(I${r}="",J${r}=""),"",I${r}*J${r})` };
-    totalCells.push(`K${r}`);
+    const q = `${L(C.qty)}${r}`, p = `${L(C.price)}${r}`;
+    row.getCell(C.total).value = { formula: `IF(OR(${q}="",${p}=""),"",${q}*${p})` };
+    totalCells.push(`${L(C.total)}${r}`);
     row.eachCell({ includeEmpty: true }, (cell, col) => {
       cell.font = { name: FONT, size: 10 };
       cell.border = BORDER;
-      cell.alignment = { vertical: 'middle', wrapText: col === 4, horizontal: [1, 6, 7, 8, 9].includes(col) ? 'center' : undefined };
+      cell.alignment = { vertical: 'middle', wrapText: [4, 9, C.note].includes(col), horizontal: [1, 6, 7, 8, 9, C.qty].includes(col) ? 'center' : undefined };
     });
-    row.getCell(10).numFmt = '#,##0.00';
-    row.getCell(11).numFmt = '#,##0.00';
+    row.getCell(C.price).numFmt = '#,##0.00';
+    row.getCell(C.total).numFmt = '#,##0.00';
     row.height = 66;
     const img = images?.[l.itemId];
     if (img) {
@@ -148,16 +156,28 @@ export async function buildPoExcel({ building, date, lines, images, subNames }) 
       items.forEach(writeLine);
     }
   }
-  ws.mergeCells(r, 1, r, last - 1);
+  ws.mergeCells(r, 1, r, C.total - 1);
   const tl = ws.getCell(r, 1);
   tl.value = 'รวมทั้งสิ้น (ไม่รวม VAT)';
   tl.font = { name: FONT, size: 11, bold: true };
   tl.alignment = { horizontal: 'right' };
-  const tc = ws.getCell(r, last);
+  const tc = ws.getCell(r, C.total);
   tc.value = { formula: totalCells.length ? `SUM(${totalCells.join(',')})` : '0' };
   tc.numFmt = '#,##0.00';
   tc.font = { name: FONT, size: 11, bold: true };
   for (let c = 1; c <= last; c++) ws.getCell(r, c).border = BORDER;
+
+  // ช่องลงนามผู้ขอซื้อ (ชิดขวา)
+  r += 3;
+  for (const text of ['ลงชื่อ ......................................................... ผู้ขอซื้อ', '( ......................................................... )', 'วันที่ ........ / ........ / ........']) {
+    ws.mergeCells(r, C.price - 2, r, last);
+    const c = ws.getCell(r, C.price - 2);
+    c.value = text;
+    c.font = { name: FONT, size: 11 };
+    c.alignment = { horizontal: 'center' };
+    ws.getRow(r).height = 24;
+    r++;
+  }
 
   return wb.xlsx.writeBuffer();
 }
