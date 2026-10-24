@@ -88,7 +88,7 @@ export default function Items({ params, alerts }) {
       return {
         building: r.building, code: r.code, name: r.v.name, brand: r.brand || '', group: r.group || '',
         sub: r.sub ? `${r.sub} ${subNames[r.sub] || ''}`.trim() : '', unit: r.v.unit,
-        stock: r.v.stock, min: r.v.min, max: r.v.max, price: r.v.price ? Math.round(r.v.price * 100) / 100 : null,
+        stock: r.v.stock, min: r.v.min, max: r.v.max, price: r.v.unitPrice ? Math.round(r.v.unitPrice * 100) / 100 : null,
         status: r.v.active ? 'ใช้งาน' : 'ยกเลิกใช้งาน', level: LEVELS[r.lv].label, ordering: r.ordering ? 'กำลังสั่ง' : '',
         vendor: main ? vendorName(main.id) : '', vendorsOther: vs.filter((v) => v !== main).map((v) => vendorName(v.id)).join(', '),
         lastInDate: fmtIsoDateThai(r.lastInDate), lastInQty: r.lastInQty ?? null, note: r.note || '',

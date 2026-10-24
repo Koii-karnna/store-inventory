@@ -186,7 +186,7 @@ const ITEM_COLS = [
   { h: 'ลำดับ', k: 'no', w: 6 }, { h: 'รูป', k: 'img', w: 14 }, { h: 'อาคาร', k: 'building', w: 7 }, { h: 'รหัส', k: 'code', w: 16 },
   { h: 'ชื่อ', k: 'name', w: 44 }, { h: 'ยี่ห้อ', k: 'brand', w: 14 }, { h: 'Group', k: 'group', w: 20 }, { h: 'หมวดย่อย', k: 'sub', w: 26 },
   { h: 'หน่วย', k: 'unit', w: 8 }, { h: 'คงเหลือ', k: 'stock', w: 9, num: true }, { h: 'Min', k: 'min', w: 7, num: true }, { h: 'Max', k: 'max', w: 7, num: true },
-  { h: 'ราคา/หน่วย (Genedia)', k: 'price', w: 12, money: true }, { h: 'สถานะ', k: 'status', w: 12 }, { h: 'ระดับแจ้งเตือน', k: 'level', w: 13 },
+  { h: 'ราคาอ้างอิง/หน่วย (ต้นทุน Genedia)', k: 'price', w: 12, money: true }, { h: 'สถานะ', k: 'status', w: 12 }, { h: 'ระดับแจ้งเตือน', k: 'level', w: 13 },
   { h: 'กำลังสั่ง', k: 'ordering', w: 10 }, { h: 'Vendor หลัก', k: 'vendor', w: 22 }, { h: 'Vendor อื่น', k: 'vendorsOther', w: 22 },
   { h: 'วันที่รับเข้าล่าสุด', k: 'lastInDate', w: 14 }, { h: 'จำนวนรับเข้าล่าสุด', k: 'lastInQty', w: 10, num: true },
   { h: 'หมายเหตุ', k: 'note', w: 30 }, { h: 'ชื่อใน Genedia', k: 'genediaName', w: 40 }, { h: 'หมายเหตุระบบ', k: 'flags', w: 22 },

@@ -29,6 +29,9 @@ export function view(item, settings = DEFAULT_SETTINGS) {
     min: g?.min ?? null,
     max: g?.max ?? null,
     price: g?.price ?? null,
+    // ราคาอ้างอิง (ใบขอซื้อ / มูลค่าคงเหลือ): ต้นทุน/หน่วยของ Genedia ถ้าเป็น 0 ใช้ราคา/หน่วย
+    // (ราคา/หน่วยใน Genedia บางรายการถูกบันทึกทับด้วยยอดรวมตอนรับเข้า — ผู้ใช้เลือกใช้ต้นทุน 2026-10-24)
+    unitPrice: g?.cost > 0 ? g.cost : g?.price ?? null,
   };
 }
 

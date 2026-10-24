@@ -69,11 +69,11 @@ function Draft() {
   const draft = (drafts[building] || []).filter((l) => rowsById[l.itemId]);
   const lines = draft.map((l) => {
     const it = rowsById[l.itemId];
-    // ค่าตั้งต้น (แก้ได้): ราคา = ราคา/หน่วย จาก Genedia · หมายเหตุ = หมายเหตุของรายการ
+    // ค่าตั้งต้น (แก้ได้): ราคา = ต้นทุน/หน่วย จาก Genedia (ถ้า 0 ใช้ราคา/หน่วย) · หมายเหตุ = หมายเหตุของรายการ
     return {
       ...l, it,
       qty: l.qty ?? suggestQty(it),
-      price: l.price ?? (it.v.price ? Math.round(it.v.price * 100) / 100 : null),
+      price: l.price ?? (it.v.unitPrice ? Math.round(it.v.unitPrice * 100) / 100 : null),
       note: l.note ?? (it.note || ''),
       lastIn: fmtLastIn(it, it.v.unit),
     };
@@ -121,7 +121,7 @@ function Draft() {
       <label className="project-field">โครงการ / วัตถุประสงค์
         <input value={project} onChange={(e) => setProjects((p) => ({ ...p, [building]: e.target.value }))} disabled={!isAdmin} placeholder="เช่น สำรองอะไหล่ประจำไตรมาส 4/2569" />
       </label>
-      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ · ราคา/หน่วย ตั้งต้นจาก Genedia (ช่องว่าง = Genedia ไม่มีราคา) · หมายเหตุตั้งต้นจากหมายเหตุของรายการ · แก้ได้ทุกช่อง · ไม่รวม VAT</p>
+      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ · ราคา/หน่วย ตั้งต้น = ต้นทุน/หน่วยใน Genedia (ถ้าเป็น 0 ใช้ราคา/หน่วย · ช่องว่าง = ไม่มีราคา) · หมายเหตุตั้งต้นจากหมายเหตุของรายการ · แก้ได้ทุกช่อง · ไม่รวม VAT</p>
       <div className="table-wrap">
         <table className="table po-table">
           <thead>

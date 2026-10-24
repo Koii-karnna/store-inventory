@@ -52,7 +52,7 @@ export default function Review({ params }) {
     const ql = q.trim().toLowerCase();
     out = out.filter((r) => (!group || r.group === group) && (!ql || [r.code, r.v.name].some((s) => s.toLowerCase().includes(ql))));
     if (tab === 'minmax' && onlyDiff) out = out.filter((r) => { const p = st(r)?.proposal; return p && (p.min !== (r.v.min ?? null) || p.max !== (r.v.max ?? null)); });
-    const value = (r) => (r.v.stock || 0) * (r.v.price || 0);
+    const value = (r) => (r.v.stock || 0) * (r.v.unitPrice || 0);
     return out.sort(tab === 'minmax' ? (a, b) => a.code.localeCompare(b.code) : (a, b) => value(b) - value(a));
   }, [result, rows, tab, group, q, onlyDiff]);
 
@@ -61,7 +61,7 @@ export default function Review({ params }) {
   if (loading || !result) return <div className="page"><Empty>กำลังคำนวณ…</Empty></div>;
 
   const S = (r) => result.stats[r.id];
-  const totalValue = list.reduce((s, r) => s + (r.v.stock || 0) * (r.v.price || 0), 0);
+  const totalValue = list.reduce((s, r) => s + (r.v.stock || 0) * (r.v.unitPrice || 0), 0);
   const lastYears = result.years.slice(-4);
 
   const exportXlsx = async () => {
@@ -71,7 +71,7 @@ export default function Review({ params }) {
       const s = S(r);
       return {
         code: r.code, name: r.v.name, group: r.group, sub: r.sub ? `${r.sub} ${subName[r.sub] || ''}` : '', unit: r.v.unit,
-        stock: r.v.stock, min: r.v.min, max: r.v.max, price: r2(r.v.price), value: r2((r.v.stock || 0) * (r.v.price || 0)),
+        stock: r.v.stock, min: r.v.min, max: r.v.max, price: r2(r.v.unitPrice), value: r2((r.v.stock || 0) * (r.v.unitPrice || 0)),
         total: s?.total ?? 0, avg: r2(s?.avg), last: s?.last ? fmtIsoDateThai(s.last) : '', since: s?.monthsSinceLast ?? '',
         ...Object.fromEntries(lastYears.map((y) => [`y${y}`, s?.byYear[y] ?? 0])),
       };
@@ -86,7 +86,7 @@ export default function Review({ params }) {
           ...yearCols, { h: `ใช้ต่อเดือน (${USAGE_RULES.windowMonths} เดือนล่าสุด)`, k: 'avg', w: 11, dec: true },
           { h: 'วันที่ใช้ล่าสุด', k: 'last', w: 13 }, { h: 'ไม่ถูกเบิก (เดือน)', k: 'since', w: 9, num: true },
           { h: 'สั่งปีละ (ครั้ง)', k: 'freq', w: 9, num: true }, { h: 'Min ใหม่ (เสนอ)', k: 'pmin', w: 9, num: true }, { h: 'Max ใหม่ (เสนอ)', k: 'pmax', w: 9, num: true },
-          { h: 'หมายเหตุระบบ', k: 'note', w: 26, wrap: true }, { h: 'ราคา/หน่วย', k: 'price', w: 11, money: true },
+          { h: 'หมายเหตุระบบ', k: 'note', w: 26, wrap: true }, { h: 'ราคาอ้างอิง/หน่วย (ต้นทุน Genedia)', k: 'price', w: 11, money: true },
           { h: 'Min ใหม่ (ช่างแก้ไข)', k: 'tmin', w: 10, num: true, tech: true }, { h: 'Max ใหม่ (ช่างแก้ไข)', k: 'tmax', w: 10, num: true, tech: true },
           { h: 'หมายเหตุช่าง', k: 'tnote', w: 30, tech: true },
         ],
@@ -103,7 +103,7 @@ export default function Review({ params }) {
         sheetName: '02_Dead Stock Review', file: 'DeadStock_Review',
         columns: [
           { h: 'Part Code', k: 'code', w: 16 }, { h: 'ชื่ออะไหล่', k: 'name', w: 42 }, { h: 'Group', k: 'group', w: 18 }, { h: 'หน่วย', k: 'unit', w: 8 },
-          { h: 'คงเหลือ', k: 'stock', w: 9, num: true }, { h: 'ราคา/หน่วย', k: 'price', w: 11, money: true }, { h: 'มูลค่าคงเหลือ', k: 'value', w: 13, money: true },
+          { h: 'คงเหลือ', k: 'stock', w: 9, num: true }, { h: 'ราคาอ้างอิง/หน่วย (ต้นทุน Genedia)', k: 'price', w: 11, money: true }, { h: 'มูลค่าคงเหลือ', k: 'value', w: 13, money: true },
           ...yearCols, { h: 'ใช้รวม (ม.ค. 2023 – ปัจจุบัน)', k: 'total', w: 11, num: true },
           { h: 'ผลการพิจารณา', k: 'tres', w: 22, tech: true }, { h: 'หมายเหตุช่าง', k: 'tnote', w: 30, tech: true },
         ],
@@ -115,7 +115,7 @@ export default function Review({ params }) {
         list: ['เก็บไว้ชั่วคราว', 'คืน/ใช้ให้หมด', 'เลิกใช้และจัดการคงเหลือ', 'ขอตรวจสอบเพิ่ม'],
         columns: [
           { h: 'Part Code', k: 'code', w: 16 }, { h: 'ชื่ออะไหล่', k: 'name', w: 42 }, { h: 'Group', k: 'group', w: 18 }, { h: 'หน่วย', k: 'unit', w: 8 },
-          { h: 'คงเหลือ', k: 'stock', w: 9, num: true }, { h: 'ราคา/หน่วย', k: 'price', w: 11, money: true }, { h: 'มูลค่าคงเหลือ', k: 'value', w: 13, money: true },
+          { h: 'คงเหลือ', k: 'stock', w: 9, num: true }, { h: 'ราคาอ้างอิง/หน่วย (ต้นทุน Genedia)', k: 'price', w: 11, money: true }, { h: 'มูลค่าคงเหลือ', k: 'value', w: 13, money: true },
           ...yearCols, { h: 'วันที่ใช้ล่าสุด', k: 'last', w: 13 },
           { h: 'ผลการตรวจสอบ', k: 'tres', w: 22, tech: true }, { h: 'หมายเหตุช่าง', k: 'tnote', w: 30, tech: true },
         ],
@@ -161,7 +161,7 @@ export default function Review({ params }) {
                   <th className="num">Min/Max ปัจจุบัน</th><th className="num">ใช้/เดือน</th><th className="num">ไม่ถูกเบิก (ด.)</th>
                   <th className="num">สั่งปีละ</th><th className="num">Min/Max เสนอ</th>
                 </> : <>
-                  <th className="num">ราคา/หน่วย</th><th className="num">มูลค่า</th><th className="num">ใช้รวม</th><th>ใช้ล่าสุด</th>
+                  <th className="num">ราคาอ้างอิง</th><th className="num">มูลค่า</th><th className="num">ใช้รวม</th><th>ใช้ล่าสุด</th>
                 </>}
               </tr>
             </thead>
@@ -185,8 +185,8 @@ export default function Review({ params }) {
                         {p?.idle && <> <Badge color="gray">ไม่ถูกเบิก 24 ด.</Badge></>}
                       </td>
                     </> : <>
-                      <td className="num">{fmtNum(r.v.price)}</td>
-                      <td className="num">{fmtNum(Math.round((r.v.stock || 0) * (r.v.price || 0)))}</td>
+                      <td className="num">{fmtNum(r.v.unitPrice)}</td>
+                      <td className="num">{fmtNum(Math.round((r.v.stock || 0) * (r.v.unitPrice || 0)))}</td>
                       <td className="num">{fmtNum(s?.total ?? 0)}</td>
                       <td className="small nowrap">{s?.last ? fmtIsoDateThai(s.last) : <span className="muted">–</span>}</td>
                     </>}
