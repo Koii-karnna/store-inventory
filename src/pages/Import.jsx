@@ -5,6 +5,7 @@ import { useData } from '../state.jsx';
 import { AsyncButton, toast } from '../ui.jsx';
 import { commit, describeChange, slimChange } from '../lib/db.js';
 import { planImport } from '../lib/importPlan.js';
+import ImageImport from './ImageImport.jsx';
 
 const KIND_LABEL = {
   store: 'Store Part List (คงเหลือ/Min/Max/สถานะ)',
@@ -172,6 +173,8 @@ export default function ImportPage() {
           </div>
         </div>
       )}
+
+      <ImageImport />
     </div>
   );
 }
