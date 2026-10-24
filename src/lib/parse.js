@@ -58,6 +58,7 @@ export function parseFile(fileName, wb) {
   if (head.includes('รหัส') && head.includes('คงเหลือ')) return parseStoreList(fileName, rows);
   if (head[0] === 'Part Code' && head.includes('Available')) return parseReport(rows);
   if (head[0] === 'Order No.' && head.includes('Part Issues Date')) return parseUsageReport(rows);
+  if (head[0] === 'Code' && head.includes('Receive Date')) return parseReceiveReport(fileName, rows);
   // รายงานการใช้อะไหล่ของระบบ G1 (เดิม) — รวมอยู่ในไฟล์ Usage_Reconciliation แล้ว ไม่นำเข้าตรง
   const top = rows.slice(0, 6).flat().map(str);
   if (top.some((s) => s.startsWith('สรุปการใช้อะไหล่')) && top.includes('เลขงาน')) return { kind: 'g1Usage', fileName };
@@ -110,6 +111,50 @@ function parseUsageBaseline(wb) {
     noMinMax,
     items: rows,
   };
+}
+
+/** วันที่รับเข้า: ข้อความ dd/mm/yyyy (ค.ศ.) หรือ serial ของ Excel → 'YYYY-MM-DD' */
+function receiveDate(v) {
+  if (typeof v === 'number') return excelDateTime(v)?.slice(0, 10) || null;
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(str(v));
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : excelDateTime(v)?.slice(0, 10) || null;
+}
+
+/**
+ * Part Receive Report จาก Genedia — ไม่มีบรรทัดบอกอาคาร จึงดูจากชื่อ Group (CMC- / CMA-)
+ * ถ้าไม่มี ใช้ชื่อไฟล์ หรือเดาจากรหัส
+ */
+function parseReceiveReport(fileName, rows) {
+  const head = rows[0].map(str);
+  const col = (h) => head.indexOf(h);
+  const c = { code: col('Code'), date: col('Receive Date'), qty: col('Qty'), price: col('Price'), total: col('Total Amount'), sup: col('Supplier Name') };
+  let groupBuilding = null;
+  const lines = [];
+  for (const r of rows.slice(1)) {
+    const c0 = str(r[0]);
+    if (c0.startsWith('Group:')) {
+      const g = c0.slice(6).trim().toUpperCase();
+      groupBuilding = g.startsWith('CMC') ? 'CMC' : g.startsWith('CMA') || g.startsWith('NP') ? 'NP' : null;
+      continue;
+    }
+    const d = receiveDate(r[c.date]);
+    const q = num(r[c.qty]);
+    if (!c0 || !d || q === null) continue;
+    const ln = { c: c0, q, d, gb: groupBuilding };
+    if (num(r[c.price]) !== null) ln.p = num(r[c.price]);
+    if (num(r[c.total]) !== null) ln.t = num(r[c.total]);
+    if (c.sup >= 0 && str(r[c.sup])) ln.s = str(r[c.sup]);
+    lines.push(ln);
+  }
+  const m = /\[(CMC|CMA|NP)\]|\b(CMC|CMA|NP)\b/i.exec(fileName || '');
+  const fromName = m ? normBuilding(m[1] || m[2]) : null;
+  const byB = { CMC: [], NP: [] };
+  for (const { gb, ...ln } of lines) {
+    const b = gb || fromName || guessBuildingFromCodes([ln.c]);
+    if (b) byB[b].push(ln);
+  }
+  const receive = Object.entries(byB).filter(([, ls]) => ls.length).map(([building, ls]) => ({ building, lines: ls }));
+  return { kind: 'receiveReport', receive, items: lines, building: receive.map((x) => x.building).join(' + ') || null };
 }
 
 /** Part Usage Report จาก Genedia (G2) — วันที่ใช้ = วันที่ปิดงาน */

@@ -72,6 +72,14 @@ GitHub → repo `store-inventory` → **Settings → Pages → Build and deploym
 - **ทบทวน** → Export Excel ให้ช่าง (ช่องเหลือง) → Admin แก้ใน Genedia → นำเข้า Store Part List ค่าใหม่ขึ้นเอง
 - กติกาอยู่ใน `src/lib/usage.js` (USAGE_RULES, USAGE_GAPS) · สคริปต์สร้างไฟล์ตั้งต้น: `Store Part list/Output/build_usage_reconciliation.py`
 
+## การรับเข้า (Part Receive Report)
+
+- ทุกเดือน: Export **Part Receive Report** CMC + NP (ไม่กรองวันที่) → นำเข้าไฟล์ → ข้ามบรรทัดที่เคยนำเข้าแล้ว
+- อาคารดูจากชื่อ Group ในไฟล์ (CMC- / CMA-) · วันที่รับ dd/mm/yyyy
+- วันที่/จำนวนรับเข้าล่าสุดของรายการ: ไฟล์ทับเฉพาะเมื่อใหม่กว่าค่าเดิม · รับเข้าตั้งแต่วันที่สั่ง → ปลดป้าย "กำลังสั่ง"
+- ราคาในไฟล์เก็บไว้ดูเท่านั้น (บรรทัดที่น่าจะกรอกเป็นราคารวมมีธงเตือน) — ยังไม่นำไปใช้
+- กติกาอยู่ใน `src/lib/receive.js`
+
 ## ออกรหัสใหม่ (Admin)
 
 เมนู **ออกรหัสใหม่** → เลือกหมวด → กรอกชื่อ 5 ส่วน → ระบุหน่วย → **จองรหัส** → คัดลอก รหัส / ชื่อ / หน่วย ไปเพิ่มใน Genedia

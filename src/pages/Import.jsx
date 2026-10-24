@@ -7,6 +7,8 @@ import { commit, describeChange, slimChange } from '../lib/db.js';
 import { planImport } from '../lib/importPlan.js';
 import { planUsage, usageDocId, USAGE_META_ID } from '../lib/usage.js';
 import { loadUsageDoc, clearUsageCache } from '../lib/usageStore.js';
+import { planReceive, receiveItemPatches, receiveDocId, RECEIVE_META_ID } from '../lib/receive.js';
+import { loadReceiveDoc, clearReceiveCache } from '../lib/receiveStore.js';
 import ImageImport from './ImageImport.jsx';
 
 const KIND_LABEL = {
@@ -16,12 +18,13 @@ const KIND_LABEL = {
   usageReport: 'Part Usage Report (การเบิกอะไหล่)',
   usageBaseline: 'ประวัติการเบิกที่ตรวจแล้ว (ตั้งต้น — แทนที่ข้อมูลการเบิกทั้งหมด)',
   g1Usage: 'รายงานการใช้อะไหล่ระบบ G1 (เดิม) — ไม่ต้องนำเข้า',
+  receiveReport: 'Part Receive Report (การรับเข้าอะไหล่)',
   unknown: 'ไม่รู้จักไฟล์นี้',
 };
 const NOT_IN_MASTER = 'รหัสไม่อยู่ใน Master (เก็บเป็นประวัติ)';
 
 export default function ImportPage() {
-  const { rows, taxonomy, user, usageMeta } = useData();
+  const { rows, byBuilding, taxonomy, user, usageMeta, receiveMeta } = useData();
   const [files, setFiles] = useState([]);
   const [overwriteWeb, setOverwriteWeb] = useState(false);
   const [plan, setPlan] = useState(null);
@@ -71,6 +74,16 @@ export default function ImportPage() {
       }
       p.usage = { ...planUsage(existingDocs, incoming, { replace: !!baseline }), baseline: !!baseline, noMinMax: baseline?.noMinMax };
     }
+
+    // ข้อมูลรับเข้า: เพิ่มเฉพาะบรรทัดใหม่ → อัปเดตรับเข้าล่าสุด (เมื่อใหม่กว่า) และปลดป้ายกำลังสั่ง
+    const receives = valid.filter((f) => f.parsed.kind === 'receiveReport').flatMap((f) => f.parsed.receive);
+    if (receives.length) {
+      const existingDocs = {};
+      if (receiveMeta?.version) for (const b of ['CMC', 'NP']) existingDocs[receiveDocId(b)] = await loadReceiveDoc(b);
+      const pr = planReceive(existingDocs, receives);
+      const patches = ['CMC', 'NP'].flatMap((b) => receiveItemPatches(pr.docs[receiveDocId(b)] || [], byBuilding[b]));
+      p.receive = { ...pr, patches };
+    }
     setPlan(p);
   };
 
@@ -111,12 +124,31 @@ export default function ImportPage() {
       const us = u.summary;
       logs.push({ action: 'import', importId, summary: `ข้อมูลการเบิก${u.baseline ? ' (ตั้งต้น แทนที่ทั้งหมด)' : ''}: ${Object.entries(us).map(([b, x]) => `${b} เพิ่ม ${x.added} บรรทัด ซ้ำ ${x.duplicate}`).join(' · ')}` });
     }
+    if (plan.receive) {
+      const r = plan.receive;
+      for (const id of r.changed) {
+        usageOps.push({ type: 'set', path: ['config', id], data: { building: id.split('_')[1], lines: r.docs[id], updatedAt: serverTimestamp() } });
+      }
+      usageOps.push({
+        type: 'set', path: ['config', RECEIVE_META_ID], merge: true,
+        data: { version: Date.now(), lastImport: { at: serverTimestamp(), by: user.name, files: valid.filter((f) => f.parsed.kind === 'receiveReport').map((f) => f.name) } },
+      });
+      for (const { item, patch } of r.patches) {
+        ops.push({ type: 'update', path: ['items', item.id], data: { ...patch, updatedAt: serverTimestamp() } });
+        logs.push({
+          action: 'import', importId, building: item.building, code: item.code, itemId: item.id,
+          changes: Object.entries(patch).map(([k, v]) => slimChange({ field: k, from: k === 'ordering' ? 'กำลังสั่ง' : item[k] ?? null, to: k === 'ordering' ? 'รับเข้าแล้ว' : v })),
+        });
+      }
+      logs.push({ action: 'import', importId, summary: `ข้อมูลรับเข้า: ${Object.entries(r.summary).map(([b, x]) => `${b} เพิ่ม ${x.added} บรรทัด ซ้ำ ${x.duplicate}`).join(' · ')} · อัปเดต ${r.patches.length} รายการ` });
+    }
     setProgress({ done: 0, total: ops.length + logs.length + usageOps.length });
     try {
       // เอกสารการเบิกมีขนาดใหญ่ บันทึกทีละเอกสาร
       for (const [i, op] of usageOps.entries()) { await commit(user, [op]); setProgress({ done: i + 1, total: ops.length + logs.length + usageOps.length }); }
       await commit(user, ops, logs, (done, total) => setProgress({ done: done + usageOps.length, total: total + usageOps.length }));
       clearUsageCache();
+      clearReceiveCache();
       toast('นำเข้าเรียบร้อย');
       setFiles([]); setPlan(null);
     } finally {
@@ -135,7 +167,7 @@ export default function ImportPage() {
         <li>Export จาก Genedia: <b>Store Part List [CMC].xls</b>, <b>Store Part List [CMA].xls</b> และ <b>Part List Report</b></li>
         <li>ลากไฟล์ทั้งหมดมาวางพร้อมกัน (ครั้งแรกให้ใส่ไฟล์ <b>Master</b> ด้วย)</li>
         <li>กด "ตรวจสอบ" ดูว่ามีอะไรเปลี่ยน แล้วกด "ยืนยันนำเข้า"</li>
-        <li>การเบิกอะไหล่: ใส่ <b>Part Usage Report</b> ของ CMC และ NP (ไม่ต้องกรองวันที่) — ระบบตัดบรรทัดที่เคยนำเข้าแล้วให้เอง</li>
+        <li>การเบิก / รับเข้า: ใส่ <b>Part Usage Report</b> และ <b>Part Receive Report</b> ของ CMC และ NP (ไม่ต้องกรองวันที่) — ระบบตัดบรรทัดที่เคยนำเข้าแล้วให้เอง</li>
       </ol>
 
       <label
@@ -162,7 +194,7 @@ export default function ImportPage() {
                       <select value={f.parsed.building || ''} onChange={(e) => setBuilding(f.name, e.target.value)}>
                         <option value="">– เลือก –</option><option value="CMC">CMC</option><option value="NP">NP (CMA)</option>
                       </select>
-                    ) : f.parsed.kind === 'usageReport' ? (f.parsed.building || '–')
+                    ) : ['usageReport', 'receiveReport'].includes(f.parsed.kind) ? (f.parsed.building || '–')
                       : ['report', 'master', 'usageBaseline'].includes(f.parsed.kind) ? 'CMC + NP' : '–'}
                     {f.parsed.kind === 'store' && !f.parsed.buildingFromName && f.parsed.building && <div className="small t-orange">เดาจากรหัส กรุณาตรวจ</div>}
                   </td>
@@ -240,10 +272,26 @@ export default function ImportPage() {
             </>
           )}
 
+          {plan.receive && (
+            <>
+              <h4>ข้อมูลรับเข้า</h4>
+              <table className="table compact">
+                <thead><tr><th>อาคาร</th><th className="num">บรรทัดใหม่</th><th className="num">ซ้ำ (ข้าม)</th><th className="num">อัปเดตรับเข้าล่าสุด</th><th className="num">ปลดป้ายกำลังสั่ง</th></tr></thead>
+                <tbody>
+                  {Object.entries(plan.receive.summary).map(([b, x]) => {
+                    const ps = plan.receive.patches.filter((p) => p.item.building === b);
+                    return <tr key={b}><td>{b}</td><td className="num">{x.added}</td><td className="num">{x.duplicate}</td><td className="num">{ps.filter((p) => 'lastInDate' in p.patch).length}</td><td className="num">{ps.filter((p) => 'ordering' in p.patch).length}</td></tr>;
+                  })}
+                </tbody>
+              </table>
+              <p className="muted small">วันที่/จำนวนรับเข้าล่าสุดจะทับค่าเดิมเฉพาะเมื่อวันที่ในไฟล์ใหม่กว่า · ราคาในไฟล์เก็บไว้ดูเท่านั้น ยังไม่นำไปใช้</p>
+            </>
+          )}
+
           <div className="row-actions">
             {progress
               ? <div className="progress"><div style={{ width: `${(progress.done / progress.total) * 100}%` }} /><span>กำลังบันทึก {progress.done}/{progress.total}</span></div>
-              : <AsyncButton className="btn btn-primary" onClick={confirmImport} disabled={!plan.creates.length && !plan.updates.length && !plan.taxonomy && !stores.length && !plan.usage?.changed.length}>ยืนยันนำเข้า</AsyncButton>}
+              : <AsyncButton className="btn btn-primary" onClick={confirmImport} disabled={!plan.creates.length && !plan.updates.length && !plan.taxonomy && !stores.length && !plan.usage?.changed.length && !plan.receive?.changed.length && !plan.receive?.patches.length}>ยืนยันนำเข้า</AsyncButton>}
           </div>
         </div>
       )}
