@@ -6,6 +6,9 @@ import { go, Thumb, Empty, Badge, AsyncButton, toast } from '../ui.jsx';
 import { suggestQty, fmtNum, fmtDateTime, fmtLastIn } from '../lib/model.js';
 import { commit, getImage } from '../lib/db.js';
 import { buildPoExcel, download, groupLines } from '../lib/excel.js';
+import { useUsageStats } from '../lib/usageStore.js';
+import { checkOrderQty } from '../lib/usage.js';
+import { useOrderingQty } from './Usage.jsx';
 
 const PO_STATUS = { ordering: ['กำลังสั่ง', 'blue'], rejected: ['ไม่อนุมัติ', 'gray'], done: ['ปิดแล้ว', 'green'] };
 
@@ -38,9 +41,28 @@ const useSubNames = () => {
   return useMemo(() => Object.fromEntries((taxonomy?.subs || []).map((s) => [s.code, s.name])), [taxonomy]);
 };
 
+/** ตรวจจำนวนสั่งเทียบการใช้จริง (แสดงในเว็บเท่านั้น) */
+function UsageCheck({ item, qty, usage, other }) {
+  if (!usage.hasData) return <span className="muted">–</span>;
+  if (usage.loading || !usage.result) return <span className="muted">…</span>;
+  const s = usage.result.stats[item.id];
+  const c = checkOrderQty(item, s, qty || 0, other);
+  if (!c) return <span className="muted">{s?.unitMismatch ? 'หน่วยตอนเบิกไม่ตรง' : '–'}</span>;
+  const r1 = (n) => Math.round(n * 10) / 10;
+  return (
+    <>
+      <div>ใช้ {fmtNum(r1(c.avg))}/ด. · แนะนำ {c.suggest ?? '–'}</div>
+      {c.after !== null && <div className="muted">หลังสั่งพอใช้ {fmtNum(r1(c.after))} ด. (รอบ {c.cycle} ด.)</div>}
+      {c.warn && <Badge color={c.warn.startsWith('สั่งมาก') ? 'orange' : 'yellow'}>{c.warn}</Badge>}
+    </>
+  );
+}
+
 function Draft() {
   const { building, drafts, setDrafts, byBuilding, isAdmin, user } = useData();
   const subNames = useSubNames();
+  const usage = useUsageStats(building);
+  const orderingQty = useOrderingQty(building);
   const [projects, setProjects] = useLocal(`si.poProject.${user.uid}`, { CMC: '', NP: '' });
   const project = projects[building] || '';
   const rowsById = useMemo(() => Object.fromEntries(byBuilding[building].map((r) => [r.id, r])), [byBuilding, building]);
@@ -105,14 +127,14 @@ function Draft() {
           <thead>
             <tr>
               <th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>ยี่ห้อ</th><th>หน่วย</th><th className="num">คงเหลือ</th>
-              <th className="num">Min/Max</th><th>รับเข้าล่าสุด</th><th className="num">จำนวนสั่ง</th><th className="num">ราคา/หน่วย</th><th className="num">รวม</th><th>หมายเหตุ</th><th />
+              <th className="num">Min/Max</th><th>รับเข้าล่าสุด</th><th className="num">จำนวนสั่ง</th><th>ตรวจตามการใช้</th><th className="num">ราคา/หน่วย</th><th className="num">รวม</th><th>หมายเหตุ</th><th />
             </tr>
           </thead>
           {sections.map(({ group, subs }) => (
             <tbody key={group}>
-              <tr className="group-row"><td colSpan={13}>{group}</td></tr>
+              <tr className="group-row"><td colSpan={14}>{group}</td></tr>
               {subs.flatMap(({ sub, items }) => [
-                sub !== null && <tr key={`sub-${sub}`} className="sub-row"><td colSpan={13}><span className="mono">{sub || '–'}</span> {subNames[sub] || (sub ? '' : 'ไม่ระบุหมวดย่อย')}</td></tr>,
+                sub !== null && <tr key={`sub-${sub}`} className="sub-row"><td colSpan={14}><span className="mono">{sub || '–'}</span> {subNames[sub] || (sub ? '' : 'ไม่ระบุหมวดย่อย')}</td></tr>,
                 ...items.map((l) => (
                 <tr key={l.itemId}>
                   <td><Thumb src={l.it.thumb} /></td>
@@ -124,6 +146,7 @@ function Draft() {
                   <td className="num">{fmtNum(l.it.v.min)}/{fmtNum(l.it.v.max)}</td>
                   <td className="small nowrap">{l.lastIn || <span className="muted">–</span>}</td>
                   <td className="num"><input className="num-input" type="number" min="1" value={l.qty ?? ''} disabled={!isAdmin} onChange={(e) => setLine(l.itemId, { qty: numOrNull(e.target.value) })} aria-label="จำนวนสั่ง" /></td>
+                  <td className="small usage-check"><UsageCheck item={l.it} qty={l.qty} usage={usage} other={l.it.ordering ? orderingQty[l.itemId] || 0 : 0} /></td>
                   <td className="num"><input className="num-input" type="number" min="0" step="0.01" value={l.price ?? ''} placeholder="0.00" disabled={!isAdmin} onChange={(e) => setLine(l.itemId, { price: numOrNull(e.target.value) })} aria-label="ราคาต่อหน่วย" /></td>
                   <td className="num">{l.price ? fmtNum(l.qty * l.price) : '–'}</td>
                   <td><input className="note-input" value={l.note} disabled={!isAdmin} onChange={(e) => setLine(l.itemId, { note: e.target.value })} aria-label="หมายเหตุ" /></td>
@@ -134,7 +157,7 @@ function Draft() {
             </tbody>
           ))}
           <tfoot>
-            <tr><td colSpan={10} className="num"><b>รวมทั้งสิ้น (ไม่รวม VAT)</b></td><td className="num"><b>{fmtNum(total)}</b></td><td colSpan={2} /></tr>
+            <tr><td colSpan={11} className="num"><b>รวมทั้งสิ้น (ไม่รวม VAT)</b></td><td className="num"><b>{fmtNum(total)}</b></td><td colSpan={2} /></tr>
           </tfoot>
         </table>
       </div>

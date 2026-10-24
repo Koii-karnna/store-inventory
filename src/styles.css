@@ -147,6 +147,12 @@ td.row-actions { margin: 0; }
 .stat-orange { border-left-color: var(--orange); } .stat-orange .stat-n { color: var(--orange); }
 .stat-gray { border-left-color: var(--gray); }
 .cards-4 { grid-template-columns: repeat(4, 1fr); }
+.usage-charts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; }
+@media (max-width: 900px) { .usage-charts { grid-template-columns: minmax(0, 1fr); } }
+.vbars-mini { height: 120px; gap: 2px; }
+.vbars-mini .vbar { min-width: 8px; }
+.vbars-mini .vbar-fill { width: 100%; border-radius: 2px 2px 0 0; }
+.vbars-mini .vbar-l { min-height: 0; font-size: 10px; }
 .cards-4 .stat { cursor: default; }
 .vbars { display: flex; align-items: flex-end; gap: 10px; height: 190px; padding: 6px 4px 0; margin-bottom: 14px; overflow-x: auto; }
 .vbar { flex: 1 1 0; min-width: 34px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; }

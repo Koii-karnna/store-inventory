@@ -3,9 +3,29 @@ import { toast } from '../ui.jsx';
 import { fmtNum, fmtIsoDateThai, fmtMonthThai } from '../lib/model.js';
 import { updateItem } from '../lib/db.js';
 import { useUsageStats } from '../lib/usageStore.js';
-import { USAGE_RULES } from '../lib/usage.js';
+import { USAGE_RULES, monthRange } from '../lib/usage.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
+
+/** กราฟรายเดือนตั้งแต่ ม.ค. 2023 — ดูว่าใช้สม่ำเสมอ ตามฤดูกาล หรือเป็นก้อน (โครงการ) */
+function MonthlyChart({ s, result }) {
+  const months = monthRange(USAGE_RULES.startMonth, result.endMonth);
+  const gaps = new Set(result.gaps);
+  const max = Math.max(1, ...months.map((m) => s.monthly[m] || 0));
+  return (
+    <div className="vbars vbars-mini" aria-label="กราฟการเบิกรายเดือน">
+      {months.map((m) => {
+        const v = s.monthly[m] || 0;
+        return (
+          <div key={m} className={`vbar ${gaps.has(m) ? 'vbar-gap' : ''}`} title={gaps.has(m) ? `${fmtMonthThai(m)}: ข้อมูลตกหล่น` : `${fmtMonthThai(m)}: ${v}`}>
+            <span className="vbar-fill" style={{ height: gaps.has(m) ? '100%' : `${(v / max) * 100}%`, opacity: m >= result.windowFrom ? 1 : 0.45 }} />
+            <span className="vbar-l">{m.endsWith('-01') ? Number(m.slice(0, 4)) + 543 : ''}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /** ส่วน "การใช้" ในหน้ารายละเอียดรายการ */
 export default function UsageSection({ item }) {
@@ -31,6 +51,8 @@ export default function UsageSection({ item }) {
         <thead><tr>{result.years.map((y) => <th key={y} className="num">{y + 543}</th>)}<th className="num">รวม</th></tr></thead>
         <tbody><tr>{result.years.map((y) => <td key={y} className="num">{fmtNum(s.byYear[y] || 0)}</td>)}<td className="num"><b>{fmtNum(s.total)}</b></td></tr></tbody>
       </table>
+      <p className="muted small" style={{ margin: '8px 0 0' }}>รายเดือนตั้งแต่ ม.ค. 2566 (แท่งเข้ม = {USAGE_RULES.windowMonths} เดือนที่ใช้คำนวณ)</p>
+      <MonthlyChart s={s} result={result} />
       <dl className="kv" style={{ marginTop: 10 }}>
         <dt>ใช้ต่อเดือน</dt>
         <dd>

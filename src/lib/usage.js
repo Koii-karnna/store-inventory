@@ -128,6 +128,42 @@ export function usageStats(building, lines, items, noMinMax = new Set()) {
   return { stats, endMonth, windowFrom, windowMonths: windowMonths.length, years, gaps: [...gaps] };
 }
 
+/**
+ * ประเมินรายการเพื่อวิเคราะห์จำนวนสั่ง
+ * ควรสั่ง = Max เสนอ − คงเหลือ − กำลังสั่ง
+ * สถานะ: short = (คงเหลือ + กำลังสั่ง) พอใช้น้อยกว่าระยะรอของ · maxHigh / maxLow = Max ปัจจุบัน > 1.5× / < 0.5× Max เสนอ
+ */
+export function assessItem(item, s, orderingQty = 0) {
+  if (!s) return { status: 'none', suggest: null };
+  if (s.unitMismatch) return { status: 'unit', suggest: null };
+  const stock = item.v?.stock ?? 0;
+  const p = s.proposal;
+  const suggest = p ? Math.max(0, p.max - stock - orderingQty) : null;
+  if (!item.v?.active) return { status: 'none', suggest: null };
+  if (s.avg > 0 && (stock + orderingQty) / s.avg < USAGE_RULES.leadMonths) return { status: 'short', suggest };
+  const max = item.v?.max;
+  if (p && max && max > p.max * 1.5) return { status: 'maxHigh', suggest };
+  // ไม่ถูกเบิกใน 24 เดือน: ไม่เตือน "Max ต่ำ" (ค่าเสนอเป็นแค่ของสำรองฉุกเฉิน)
+  if (p && !p.idle && (!max || max < p.max * 0.5)) return { status: 'maxLow', suggest };
+  return { status: 'ok', suggest };
+}
+
+/**
+ * ตรวจจำนวนสั่งในใบขอซื้อ ตามรอบสั่ง (ผู้ใช้เลือก): หลังสั่งพอใช้ > 1.5 เท่าของรอบ = สั่งมาก · < ครึ่งรอบ = สั่งน้อย
+ * รอบ = 12 ÷ สั่งปีละ (เดือน)
+ */
+export function checkOrderQty(item, s, qty, otherOrdering = 0) {
+  if (!s || s.unitMismatch) return null;
+  const stock = item.v?.stock ?? 0;
+  const p = s.proposal;
+  const suggest = p ? Math.max(0, p.max - stock - otherOrdering) : null;
+  if (!(s.avg > 0)) return { avg: 0, after: null, suggest, warn: qty > 0 && s.proposal?.idle ? 'ไม่ถูกเบิกใน 24 เดือน' : null };
+  const cycle = 12 / s.freq;
+  const after = (stock + otherOrdering + (qty || 0)) / s.avg;
+  const warn = after > cycle * 1.5 ? 'สั่งมากเกินรอบ' : after < cycle * 0.5 ? 'สั่งน้อยกว่ารอบ' : null;
+  return { avg: s.avg, after, suggest, cycle, warn };
+}
+
 /** รายการทบทวน: Dead Stock = ใช้งาน + มีของ + ไม่เคยเบิกตั้งแต่ 2023 · ยกเลิกแต่มีของ */
 export const isDeadStock = (it, st) => it.v?.active && (it.v?.stock ?? 0) > 0 && st && st.total === 0;
 export const isInactiveWithStock = (it) => !it.v?.active && (it.v?.stock ?? 0) > 0;
