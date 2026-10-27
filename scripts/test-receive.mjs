@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { readWorkbook, parseFile } from '../src/lib/parse.js';
 import { planImport } from '../src/lib/importPlan.js';
 import { view } from '../src/lib/model.js';
-import { planReceive, receiveSummary, receiveItemPatches, suspiciousPrice, referencePrice, receiveDocId } from '../src/lib/receive.js';
+import { planReceive, receiveSummary, receiveItemPatches, suspiciousPrice, referencePrice, receiveDocId, lastBuyPrice } from '../src/lib/receive.js';
 
 const dir = join(import.meta.dirname, '..', '..', '..', 'Store Part list');
 const tmp = mkdtempSync(join(tmpdir(), 'si-'));
@@ -34,6 +34,13 @@ ok(flagged.some((l) => l.c === '02-006-08-0321'), 'จับ Power supply ที
 const sum = receiveSummary(rc.receive[0].lines, byCode);
 ok(sum['02-006-08-0321'].lastPrice === null, 'ราคาที่ติดธงไม่ใช้เป็นราคาซื้อล่าสุด');
 ok(sum['01-002-02-1217'].lastPrice === 190 && sum['01-002-02-1217'].lastDate === '2026-05-29', 'ราคาซื้อล่าสุดปกติ');
+
+// ราคาซื้อล่าสุดสำหรับใบขอซื้อ: บรรทัดล่าสุดติดธง → ไม่แสดงตัวเลข
+const linesOf = (c) => rc.receive[0].lines.filter((l) => l.c === c);
+const lb = (c) => lastBuyPrice(linesOf(c), byCode[c]);
+ok(lb('01-002-02-1217').p === 190 && lb('01-002-02-1217').d === '2026-05-29', `ราคาซื้อล่าสุดปกติ ${JSON.stringify(lb('01-002-02-1217'))}`);
+ok(lb('01-002-34-0421').flag === true && lb('01-002-34-0421').p === undefined, `LED T8 23W ติดธง ${JSON.stringify(lb('01-002-34-0421'))}`);
+ok(lastBuyPrice([], byCode['01-002-02-1217']).none === true, 'ไม่มีข้อมูลรับเข้า');
 
 // รับเข้าล่าสุด: ไฟล์ทับเมื่อใหม่กว่า + ปลดป้ายกำลังสั่ง
 const test = [

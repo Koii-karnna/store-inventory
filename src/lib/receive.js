@@ -58,6 +58,19 @@ export function receiveSummary(lines, itemsByCode) {
   return out;
 }
 
+/**
+ * ราคาซื้อล่าสุดสำหรับแนบใบขอซื้อ (ผู้ใช้เลือก: บรรทัดล่าสุดติดธง → ไม่แสดงตัวเลข ไม่ย้อนไปใช้ราคาเก่า)
+ * @returns { p, d } | { flag: true, d } | { noPrice: true, d } | { none: true }
+ */
+export function lastBuyPrice(codeLines, item) {
+  if (!codeLines?.length) return { none: true };
+  const latest = [...codeLines].sort((a, b) => b.d.localeCompare(a.d));
+  const priced = latest.find((l) => l.p > 0);
+  if (!priced) return { noPrice: true, d: latest[0].d };
+  if (suspiciousPrice(priced, referencePrice(item))) return { flag: true, d: priced.d };
+  return { p: Math.round(priced.p * 100) / 100, d: priced.d };
+}
+
 const dayOf = (ts) => {
   const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : ts ? new Date(ts) : null;
   return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : null;
