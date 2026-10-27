@@ -1,5 +1,5 @@
 // สร้างไฟล์ Excel: ใบขอสั่งซื้อ (มีรูป) และรายการที่ Genedia ไม่ตรงกับ Master
-import { fmtDateThai } from './model.js';
+import { fmtDateThai, fmtMonthThai } from './model.js';
 
 const FONT = 'Tahoma';
 const thin = { style: 'thin', color: { argb: 'FFBFBFBF' } };
@@ -75,8 +75,9 @@ export function groupLines(lines, groupOf = (l) => l.group, subOf = (l) => l.sub
  * ใบขอสั่งซื้อ: หัวเอกสาร + โครงการ/วัตถุประสงค์ + แยกหัวข้อตาม Group และหมวดย่อย + ช่องลงนามผู้ขอซื้อ, ไม่รวม VAT
  * lines: [{code,name,brand,unit,stock,min,max,group,sub,lastIn,qty,price,note}]
  * images: { [itemId]: dataURL } · subNames: { [หมวดย่อย]: ชื่อ }
+ * usage (ถ้ามี): เพิ่มชีต "สถิติการใช้" — ดู addUsageSheet
  */
-export async function buildPoExcel({ building, date, project, lines, images, subNames }) {
+export async function buildPoExcel({ building, date, project, lines, images, subNames, usage }) {
   const ExcelJS = await loadExcelJS();
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('ใบขอสั่งซื้อ', {
@@ -179,7 +180,109 @@ export async function buildPoExcel({ building, date, project, lines, images, sub
     r++;
   }
 
+  if (usage) addUsageSheet(wb, { building, date, lines, usage, subNames });
   return wb.xlsx.writeBuffer();
+}
+
+/**
+ * ชีต "สถิติการใช้" แนบใบขอซื้อ (ประกอบการขออนุมัติ) — ลำดับเดียวกับชีตใบขอซื้อ
+ * usage: { endMonth, window: ช่วงเดือนเฉลี่ย, months: จำนวนเดือนที่มีข้อมูลในช่วงนั้น, years, gaps } · line.use: { y: {ปี: จำนวน}, avg, um, idle } | null
+ */
+function addUsageSheet(wb, { building, date, lines, usage, subNames }) {
+  const { endMonth, window, months, years, gaps } = usage;
+  const endYear = Number(endMonth.slice(0, 4));
+  const partial = endMonth.slice(5) !== '12';
+  const yearHead = (y) => (y === endYear && partial ? `${y}*` : `${y}`);
+  const cols = [
+    { h: 'ลำดับ', w: 6 }, { h: 'รหัส', w: 16 }, { h: 'ชื่อ', w: 40 }, { h: 'หน่วย', w: 7 },
+    ...years.map((y) => ({ h: `ใช้ปี\n${yearHead(y)}`, w: 9, year: y })),
+    { h: `เฉลี่ย/เดือน\n(${window} เดือนล่าสุด)`, w: 12 }, { h: 'คงเหลือ', w: 8 }, { h: 'Min/Max', w: 9 },
+    { h: 'จำนวนสั่ง', w: 9 }, { h: 'หลังสั่ง\nพอใช้ (เดือน)', w: 11 }, { h: 'หมายเหตุ', w: 30 },
+  ];
+  const ws = wb.addWorksheet('สถิติการใช้', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
+  });
+  ws.columns = cols.map((c) => ({ width: c.w }));
+  const last = cols.length;
+  const title = (row, text, font) => {
+    ws.mergeCells(row, 1, row, last);
+    const c = ws.getCell(row, 1);
+    c.value = text;
+    c.font = { name: FONT, ...font };
+    c.alignment = { horizontal: 'center' };
+  };
+  title(1, `สถิติการใช้อะไหล่ ประกอบใบขอสั่งซื้อ อาคาร ${building}`, { size: 16, bold: true });
+  title(2, `ใบขอสั่งซื้อวันที่ ${fmtDateThai(date)} · ข้อมูลการเบิกถึง ${fmtMonthThai(endMonth)}`, { size: 11 });
+
+  const HEAD = 4;
+  cols.forEach((c, i) => {
+    const cell = ws.getCell(HEAD, i + 1);
+    cell.value = c.h;
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = BORDER;
+  });
+  ws.getRow(HEAD).height = 34;
+  ws.views = [{ state: 'frozen', ySplit: HEAD }];
+  ws.pageSetup.printTitlesRow = `${HEAD}:${HEAD}`;
+
+  let r = HEAD + 1, no = 1;
+  const header = (text, argb, size) => {
+    ws.mergeCells(r, 1, r, last);
+    const c = ws.getCell(r, 1);
+    c.value = text;
+    c.font = { name: FONT, size, bold: true };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+    c.border = BORDER;
+    r++;
+  };
+  const r1 = (n) => Math.round(n * 10) / 10;
+  const writeLine = (l) => {
+    const u = l.use;
+    const showUse = u && !u.um;
+    const after = showUse && u.avg > 0 ? r1(((l.stock ?? 0) + (l.qty || 0)) / u.avg) : '';
+    const note = !u ? 'ไม่มีประวัติการเบิก'
+      : u.um ? 'หน่วยตอนเบิก (เช่น ลิตร/กก.) ไม่ตรงหน่วยคงเหลือ — ไม่แสดงตัวเลข'
+      : u.idle ? `ไม่ถูกเบิกใน ${window} เดือนล่าสุด` : '';
+    const vals = [
+      no++, l.code, l.name, l.unit || '',
+      ...years.map((y) => (showUse ? u.y?.[y] ?? 0 : u ? '–' : 0)),
+      showUse ? r1(u.avg) : u ? '–' : 0, l.stock ?? '', `${l.min ?? '-'}/${l.max ?? '-'}`, l.qty || '', after, note,
+    ];
+    const row = ws.getRow(r);
+    vals.forEach((v, i) => {
+      const cell = row.getCell(i + 1);
+      cell.value = v;
+      cell.font = { name: FONT, size: 10 };
+      cell.border = BORDER;
+      cell.alignment = { vertical: 'middle', wrapText: i === 2 || i === last - 1, horizontal: i === 0 || (i >= 3 && i < last - 1) ? 'center' : undefined };
+    });
+    r++;
+  };
+  for (const { group, subs } of groupLines(lines)) {
+    header(group, 'FFDDEBF7', 11);
+    for (const { sub, items } of subs) {
+      if (sub !== null) header(`   ${sub || '–'}  ${subNames?.[sub] || (sub ? '' : 'ไม่ระบุหมวดย่อย')}`, 'FFF2F2F2', 10);
+      items.forEach(writeLine);
+    }
+  }
+
+  r += 1;
+  const notes = [
+    'หมายเหตุ',
+    `• ใช้ปี = จำนวนที่เบิกจริงตามปีปฏิทิน (ม.ค.–ธ.ค.) นับตามวันปิดงาน${partial ? ` · ${endYear}* = ม.ค.–${fmtMonthThai(endMonth).split(' ')[0]} ${endYear} (ยังไม่ครบปี)` : ''}`,
+    `• เฉลี่ย/เดือน = จำนวนเบิกรวม ${window} เดือนล่าสุด ÷ ${months} เดือนที่มีข้อมูล (ตรงกับที่ใช้คำนวณ Min/Max เสนอ)`,
+    '• หลังสั่งพอใช้ = (คงเหลือ + จำนวนสั่ง) ÷ เฉลี่ย/เดือน',
+    ...(gaps.length ? [`• ข้อมูลการเบิกเดือน ${gaps.map(fmtMonthThai).join(', ')} ไม่ครบ จึงไม่นับเดือนเหล่านี้ในค่าเฉลี่ย`] : []),
+  ];
+  for (const [i, text] of notes.entries()) {
+    ws.mergeCells(r, 1, r, last);
+    const c = ws.getCell(r, 1);
+    c.value = text;
+    c.font = { name: FONT, size: 10, bold: i === 0, color: { argb: 'FF404040' } };
+    r++;
+  }
 }
 
 const ITEM_COLS = [

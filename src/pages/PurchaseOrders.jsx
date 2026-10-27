@@ -7,7 +7,7 @@ import { suggestQty, fmtNum, fmtDateTime, fmtLastIn } from '../lib/model.js';
 import { commit, getImage } from '../lib/db.js';
 import { buildPoExcel, download, groupLines } from '../lib/excel.js';
 import { useUsageStats } from '../lib/usageStore.js';
-import { checkOrderQty } from '../lib/usage.js';
+import { checkOrderQty, USAGE_RULES } from '../lib/usage.js';
 import { useOrderingQty } from './Usage.jsx';
 
 const PO_STATUS = { ordering: ['กำลังสั่ง', 'blue'], rejected: ['ไม่อนุมัติ', 'gray'], done: ['ปิดแล้ว', 'green'] };
@@ -35,6 +35,23 @@ async function loadImages(itemIds) {
 }
 
 const fileName = (building, d) => `ใบขอสั่งซื้อ_${building}_${d.toISOString().slice(0, 10)}.xlsx`;
+
+/**
+ * สถิติการใช้ ณ วันที่สร้างใบขอซื้อ (เก็บไว้กับใบ เพื่อดาวน์โหลดซ้ำได้ตัวเลขเดิม)
+ * → { info: ค่าระดับใบ, use(itemId): ค่ารายบรรทัด } · ไม่มีข้อมูลการเบิก → null
+ */
+function usageSnapshot(usage) {
+  if (!usage.hasData || !usage.result) return null;
+  const { stats, endMonth, windowMonths, years, gaps } = usage.result;
+  return {
+    info: { endMonth, window: USAGE_RULES.windowMonths, months: windowMonths, years, gaps },
+    use: (itemId) => {
+      const s = stats[itemId];
+      if (!s || !s.total) return null;
+      return { y: Object.fromEntries(Object.entries(s.byYear).map(([y, q]) => [y, Math.round(q * 100) / 100])), avg: Math.round(s.avg * 100) / 100, um: !!s.unitMismatch, idle: !!s.proposal?.idle };
+    },
+  };
+}
 
 const useSubNames = () => {
   const { taxonomy } = useData();
@@ -89,17 +106,20 @@ function Draft() {
     if (lines.some((l) => !l.qty || l.qty <= 0)) throw new Error('กรุณาใส่จำนวนสั่งให้ครบทุกรายการ');
     const already = lines.filter((l) => l.it.ordering);
     if (already.length && !confirm(`มี ${already.length} รายการที่ "กำลังสั่ง" อยู่แล้ว ต้องการสั่งซ้ำหรือไม่?`)) return;
+    if (usage.hasData && (usage.loading || !usage.result)) throw new Error('กำลังโหลดข้อมูลการเบิก กรุณารอสักครู่แล้วกดอีกครั้ง');
     const now = new Date();
+    const us = usageSnapshot(usage);
     const snapshot = lines.map(({ it, qty, price, note, lastIn }) => ({
       itemId: it.id, code: it.code, name: it.v.name, brand: it.brand || '', unit: it.v.unit, stock: it.v.stock,
       min: it.v.min, max: it.v.max, group: it.group || '', sub: it.sub || '', lastIn, qty, price: price ?? null, note: note.trim(),
+      ...(us && { use: us.use(it.id) }),
     }));
     const images = await loadImages(snapshot.map((l) => l.itemId));
-    const buf = await buildPoExcel({ building, date: now, project, lines: snapshot, images, subNames });
+    const buf = await buildPoExcel({ building, date: now, project, lines: snapshot, images, subNames, usage: us?.info });
 
     const poId = doc(collection(db, 'pos')).id;
     const ops = [
-      { type: 'set', path: ['pos', poId], data: { building, createdAt: serverTimestamp(), createdBy: user.uid, createdByName: user.name, status: 'ordering', project: project.trim(), lines: snapshot, total } },
+      { type: 'set', path: ['pos', poId], data: { building, createdAt: serverTimestamp(), createdBy: user.uid, createdByName: user.name, status: 'ordering', project: project.trim(), lines: snapshot, total, ...(us && { usage: us.info }) } },
       ...snapshot.map((l) => ({ type: 'update', path: ['items', l.itemId], data: { ordering: { poId, at: now, stockAtOrder: l.stock ?? 0 } } })),
     ];
     const logs = [
@@ -121,7 +141,7 @@ function Draft() {
       <label className="project-field">โครงการ / วัตถุประสงค์
         <input value={project} onChange={(e) => setProjects((p) => ({ ...p, [building]: e.target.value }))} disabled={!isAdmin} placeholder="เช่น สำรองอะไหล่ประจำไตรมาส 4/2569" />
       </label>
-      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ · ราคา/หน่วย ตั้งต้น = ต้นทุน/หน่วยใน Genedia (ถ้าเป็น 0 ใช้ราคา/หน่วย · ช่องว่าง = ไม่มีราคา) · หมายเหตุตั้งต้นจากหมายเหตุของรายการ · แก้ได้ทุกช่อง · ไม่รวม VAT</p>
+      <p className="muted">จำนวนสั่งตั้งต้น = Max − คงเหลือ · ราคา/หน่วย ตั้งต้น = ต้นทุน/หน่วยใน Genedia (ถ้าเป็น 0 ใช้ราคา/หน่วย · ช่องว่าง = ไม่มีราคา) · หมายเหตุตั้งต้นจากหมายเหตุของรายการ · แก้ได้ทุกช่อง · ไม่รวม VAT{usage.hasData && ' · ไฟล์ Excel มีชีต "สถิติการใช้" (ใช้รายปี + เฉลี่ย/เดือน) แนบประกอบการขออนุมัติ'}</p>
       <div className="table-wrap">
         <table className="table po-table">
           <thead>
@@ -180,7 +200,8 @@ function History() {
   const redownload = async (po) => {
     const images = await loadImages(po.lines.map((l) => l.itemId));
     const date = po.createdAt?.toDate?.() || new Date();
-    download(await buildPoExcel({ building: po.building, date, project: po.project, lines: po.lines, images, subNames }), fileName(po.building, date));
+    // ใบที่สร้างก่อนมีชีตสถิติการใช้: ไม่มีตัวเลข ณ วันที่สร้าง จึงไม่แนบชีตนี้
+    download(await buildPoExcel({ building: po.building, date, project: po.project, lines: po.lines, images, subNames, usage: po.usage }), fileName(po.building, date));
   };
 
   // ไม่อนุมัติ / ปิดใบ: ปลดป้าย "กำลังสั่ง" ของรายการที่ยังผูกกับใบนี้

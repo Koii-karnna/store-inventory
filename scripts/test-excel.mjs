@@ -9,7 +9,11 @@ const lines = [
   { itemId: 'CMC_01-002-02-1217', code: '01-002-02-1217', name: 'หลอด LED T8 16W L&E', brand: 'L&E', unit: 'หลอด', stock: 0, min: 50, max: 200, group: 'CMC-LIGHTING', sub: '01-002', qty: 200, price: 190 },
   { itemId: 'CMC_02-005-01-1217', code: '02-005-01-1217', name: 'สายไฟ THW สีดำ 1x2.5 SQMM. THAI YAZAKI', brand: 'THAI YAZAKI', unit: 'ม้วน', stock: 0, min: 2, max: 5, group: 'CMC-ELECTRICAL', sub: '02-005', qty: 5, price: null },
 ];
+lines[0].use = { y: { 2023: 12, 2024: 8, 2025: 10, 2026: 6 }, avg: 0.77, um: false, idle: false };
+lines[1].use = { y: { 2023: 0, 2024: 30, 2025: 0, 2026: 0 }, avg: 0, um: false, idle: true };
+lines[2].use = null;
 const subNames = { '01-001': 'หลอดไส้ / Pilot Lamp', '01-002': 'หลอด LED', '02-005': 'สายไฟฟ้า' };
-const buf = await buildPoExcel({ building: 'CMC', date: new Date('2026-10-23'), project: 'สำรองอะไหล่ไตรมาส 4/2569', lines, images: { 'CMC_01-001-05-0519': img }, subNames });
+const usage = { endMonth: '2026-10', window: 24, months: 22, years: [2023, 2024, 2025, 2026], gaps: ['2026-02', '2026-03'] };
+const buf = await buildPoExcel({ building: 'CMC', date: new Date('2026-10-23'), project: 'สำรองอะไหล่ไตรมาส 4/2569', lines, images: { 'CMC_01-001-05-0519': img }, subNames, usage });
 writeFileSync(outPath, Buffer.from(buf));
 console.log('wrote', outPath, buf.byteLength, 'bytes');
