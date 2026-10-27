@@ -13,7 +13,7 @@ const load = (p) => { const t = join(tmp, p.split(/[\\/]/).pop()); copyFileSync(
 let fail = 0;
 const ok = (c, m) => { console.log(`${c ? 'ok' : 'FAIL'}: ${m}`); if (!c) fail++; };
 
-const rc = load(join(dir, 'Part Receive Report.xlsx'));
+const rc = load(join(dir, 'Part Receive Report CMC.xlsx'));
 ok(rc.kind === 'receiveReport', `detected ${rc.kind} · ${rc.receive.map((r) => `${r.building} ${r.lines.length}`).join(', ')}`);
 ok(rc.receive.length === 1 && rc.receive[0].building === 'CMC' && rc.receive[0].lines.length === 31, 'CMC 31 บรรทัด (อาคารจากชื่อ Group)');
 const l0 = rc.receive[0].lines[0];
