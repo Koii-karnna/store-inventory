@@ -118,20 +118,29 @@ function LoginScreen() {
   );
 }
 
+// เมนูแบ่งเป็นกลุ่ม: งานประจำ · วิเคราะห์ · ข้อมูล · ผู้ดูแล (เฉพาะ Admin)
 const NAV = [
-  { path: '/dashboard', label: 'Dashboard' },
-  { path: '/items', label: 'รายการอะไหล่' },
-  { path: '/alerts', label: 'แจ้งเตือน', badge: 'alerts' },
-  { path: '/po', label: 'ใบขอซื้อ', badge: 'draft' },
-  { path: '/usage', label: 'การใช้อะไหล่' },
-  { path: '/review', label: 'ทบทวน' },
-  { path: '/mismatch', label: 'ไม่ตรง Master' },
-  { path: '/vendors', label: 'Vendor' },
-  { path: '/import', label: 'นำเข้าไฟล์', admin: true },
-  { path: '/newcode', label: 'ออกรหัสใหม่', admin: true },
-  { path: '/logs', label: 'Log' },
-  { path: '/users', label: 'ผู้ใช้', admin: true },
-  { path: '/settings', label: 'ตั้งค่า', admin: true },
+  [
+    { path: '/dashboard', label: 'Dashboard' },
+    { path: '/items', label: 'รายการอะไหล่' },
+    { path: '/alerts', label: 'แจ้งเตือน', badge: 'alerts' },
+    { path: '/po', label: 'ใบขอซื้อ', badge: 'draft' },
+  ],
+  [
+    { path: '/usage', label: 'การใช้อะไหล่' },
+    { path: '/review', label: 'ทบทวน' },
+    { path: '/mismatch', label: 'ไม่ตรง Master' },
+  ],
+  [
+    { path: '/vendors', label: 'Vendor' },
+  ],
+  [
+    { path: '/import', label: 'นำเข้าไฟล์', admin: true },
+    { path: '/newcode', label: 'ออกรหัสใหม่', admin: true },
+    { path: '/logs', label: 'Log', admin: true },
+    { path: '/users', label: 'ผู้ใช้', admin: true },
+    { path: '/settings', label: 'ตั้งค่า', admin: true },
+  ],
 ];
 
 export function Shell() {
@@ -150,7 +159,7 @@ export function Shell() {
   else if (path === '/usage') page = <Usage />;
   else if (path === '/review') page = <Review params={params} />;
   else if (path === '/vendors') page = <Vendors />;
-  else if (path === '/logs') page = <Logs />;
+  else if (path === '/logs' && isAdmin) page = <Logs />;
   else if (path === '/import' && isAdmin) page = <ImportPage />;
   else if (path === '/newcode' && isAdmin) page = <NewCode />;
   else if (path === '/users' && isAdmin) page = <Users />;
@@ -174,12 +183,19 @@ export function Shell() {
           <button className="btn btn-ghost btn-sm" onClick={() => signOut(auth)}>ออก</button>
         </div>
       </header>
-      <nav className="nav">
-        {NAV.filter((n) => !n.admin || isAdmin).map((n) => (
-          <a key={n.path} href={`#${n.path}`} className={path === n.path || (path === '/' && n.path === '/dashboard') ? 'active' : ''}>
-            {n.label}
-            {n.badge && badges[n.badge] > 0 && <span className={`count ${n.badge === 'alerts' ? 'count-red' : ''}`}>{badges[n.badge]}</span>}
-          </a>
+      <nav className="nav" aria-label="เมนูหลัก">
+        {NAV.map((group) => group.filter((n) => !n.admin || isAdmin)).filter((g) => g.length).map((group, gi) => (
+          <div key={gi} className={`nav-group ${group[0].admin ? 'nav-admin' : ''}`}>
+            {group.map((n) => {
+              const active = path === n.path || ((path === '/' || path === '') && n.path === '/dashboard');
+              return (
+                <a key={n.path} href={`#${n.path}`} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined}>
+                  {n.label}
+                  {n.badge && badges[n.badge] > 0 && <span className={`count ${n.badge === 'alerts' ? 'count-red' : ''}`}>{badges[n.badge]}</span>}
+                </a>
+              );
+            })}
+          </div>
         ))}
       </nav>
       <main className="main">{page}</main>
