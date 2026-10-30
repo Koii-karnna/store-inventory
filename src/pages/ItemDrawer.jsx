@@ -9,7 +9,7 @@ import UsageSection from './UsageSection.jsx';
 import ReceiveSection from './ReceiveSection.jsx';
 
 export default function ItemDrawer({ item, onClose }) {
-  const { isAdmin, user, taxonomy, brands, vendors } = useData();
+  const { isAdmin, user, taxonomy, brands, vendors, settings } = useData();
   const [img, setImg] = useState(null);
   const [history, setHistory] = useState(null);
   const [form, setForm] = useState(() => pick(item));
@@ -31,7 +31,8 @@ export default function ItemDrawer({ item, onClose }) {
 
   const groups = [...new Set([...(taxonomy?.groups?.[item.building] || []), item.group].filter(Boolean))].sort();
   const subs = (taxonomy?.subs || []).filter((s) => s.group === form.group && (!s.closed || s.code === form.sub));
-  const mm = mismatches(item);
+  // ปิดช่วงเปลี่ยนผ่านแล้ว (Genedia เป็นข้อมูลหลัก) → ไม่ต้องเทียบกับ Master
+  const mm = settings.preferMaster ? mismatches(item) : [];
   const webItem = item.m?.source === 'web';
   const f = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }));
 

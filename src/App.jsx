@@ -129,7 +129,7 @@ const NAV = [
   [
     { path: '/usage', label: 'การใช้อะไหล่' },
     { path: '/review', label: 'ทบทวน' },
-    { path: '/mismatch', label: 'ไม่ตรง Master' },
+    { path: '/mismatch', label: 'ไม่ตรง Master', transition: true },
   ],
   [
     { path: '/vendors', label: 'Vendor' },
@@ -145,7 +145,7 @@ const NAV = [
 
 export function Shell() {
   const { path, params } = useRoute();
-  const { user, isAdmin, building, setBuilding, byBuilding, drafts, loading } = useData();
+  const { user, isAdmin, building, setBuilding, byBuilding, drafts, loading, settings } = useData();
   const [pwOpen, setPwOpen] = useState(false);
   const alertCount = (b) => byBuilding[b].filter((r) => needsOrder(r.lv, r)).length;
   const badges = { alerts: alertCount(building), draft: drafts[building]?.length || 0 };
@@ -155,7 +155,7 @@ export function Shell() {
   else if (path === '/items') page = <Items key="items" params={params} />;
   else if (path === '/alerts') page = <Items key="alerts" params={{ level: 'need', ...params }} alerts />;
   else if (path === '/po') page = <PurchaseOrders params={params} />;
-  else if (path === '/mismatch') page = <Mismatch />;
+  else if (path === '/mismatch' && settings.preferMaster) page = <Mismatch />;
   else if (path === '/usage') page = <Usage />;
   else if (path === '/review') page = <Review params={params} />;
   else if (path === '/vendors') page = <Vendors />;
@@ -184,7 +184,7 @@ export function Shell() {
         </div>
       </header>
       <nav className="nav" aria-label="เมนูหลัก">
-        {NAV.map((group) => group.filter((n) => !n.admin || isAdmin)).filter((g) => g.length).map((group, gi) => (
+        {NAV.map((group) => group.filter((n) => (!n.admin || isAdmin) && (!n.transition || settings.preferMaster))).filter((g) => g.length).map((group, gi) => (
           <div key={gi} className={`nav-group ${group[0].admin ? 'nav-admin' : ''}`}>
             {group.map((n) => {
               const active = path === n.path || ((path === '/' || path === '') && n.path === '/dashboard');

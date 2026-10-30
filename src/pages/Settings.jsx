@@ -32,6 +32,7 @@ export default function Settings() {
         </label>
         <p className="muted small">
           เปิดไว้ระหว่างที่ IT ยังแก้ Genedia ไม่เสร็จ — เมื่อหน้า "ไม่ตรง Master" เหลือน้อยหรือหมดแล้ว ให้ปิด เว็บจะแสดงตาม Genedia ทั้งหมด
+          และซ่อนเมนู "ไม่ตรง Master" (เปิดกลับได้ทุกเมื่อ)
           (คงเหลือ / Min / Max แสดงตาม Genedia เสมอ · สถานะ: ยกเลิกใน Genedia หรือ Master อย่างใดอย่างหนึ่ง = ยกเลิก)
         </p>
       </section>
