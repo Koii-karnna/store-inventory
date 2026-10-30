@@ -37,7 +37,7 @@ function UsageCells({ r, s, ordering, loading }) {
 }
 
 export default function Items({ params, alerts }) {
-  const { byBuilding, building, taxonomy, vendors, isAdmin, addToDraft, drafts } = useData();
+  const { byBuilding, building, taxonomy, vendors, isAdmin, addToDraft, drafts, settings } = useData();
   const [openId, setOpenId] = useState(null);
   const [sel, setSel] = useState(new Set());
   const [sort, setSort] = useState(alerts ? 'level' : 'code');
@@ -123,7 +123,7 @@ export default function Items({ params, alerts }) {
         vendor: main ? vendorName(main.id) : '', vendorsOther: vs.filter((v) => v !== main).map((v) => vendorName(v.id)).join(', '),
         lastInDate: fmtIsoDateThai(r.lastInDate), lastInQty: r.lastInQty ?? null, note: r.note || '',
         genediaName: r.g?.name && r.g.name !== r.v.name ? r.g.name : '',
-        flags: [r.inGenedia === false && 'ไม่มีใน Genedia', !r.m && 'ไม่มีใน Master', r.review && 'รอตรวจ Group'].filter(Boolean).join(', '),
+        flags: [r.inGenedia === false && 'ไม่มีใน Genedia', settings.preferMaster && !r.m && 'ไม่มีใน Master', r.review && 'รอตรวจ Group'].filter(Boolean).join(', '),
         itemId: r.id, thumb: r.thumb,
       };
     });
