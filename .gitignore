@@ -8,3 +8,4 @@ preview.html
 # ไฟล์ข้อมูลจริงจาก Genedia ไม่เก็บใน GitHub
 *.xls
 *.xlsx
+.claude/
