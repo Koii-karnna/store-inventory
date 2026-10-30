@@ -58,6 +58,9 @@ export function level(item, settings = DEFAULT_SETTINGS) {
   return 'ok';
 }
 
+/** รอตรวจ Group: เฉพาะรายการที่ยังใช้งานและยังอยู่ใน Genedia (ยกเลิกแล้ว/หายจาก Genedia ไม่ต้องตรวจ) */
+export const needsReview = (r) => !!r.review && r.lv !== 'inactive' && r.inGenedia !== false;
+
 /** ต้องสั่ง = หมด หรือ ถึง Min และยังไม่อยู่ระหว่างสั่ง */
 export const needsOrder = (lv, item) => (lv === 'out' || lv === 'low') && !item.ordering;
 

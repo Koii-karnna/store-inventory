@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useData } from '../state.jsx';
 import { go, Empty } from '../ui.jsx';
-import { needsOrder, LEVELS, fmtDateTime } from '../lib/model.js';
+import { needsOrder, needsReview, LEVELS, fmtDateTime } from '../lib/model.js';
 import { backupAgeDays, BACKUP_REMIND_DAYS } from './Backup.jsx';
 
 const SEGMENTS = ['out', 'low', 'near', 'ok', 'nomin', 'pending', 'nodata'];
@@ -24,7 +24,7 @@ export default function Dashboard() {
   const extra = [
     { label: 'ใกล้ Min', n: rows.filter((r) => r.lv === 'near').length, to: { level: 'near' } },
     { label: 'กำลังสั่ง', n: rows.filter((r) => r.ordering).length, to: { level: 'ordering' } },
-    { label: 'รอตรวจ Group', n: rows.filter((r) => r.review).length, to: { level: 'review' } },
+    { label: 'รอตรวจ Group', n: rows.filter(needsReview).length, to: { level: 'review' } },
     { label: 'รอเพิ่มใน Genedia', n: rows.filter((r) => r.lv === 'pending').length, to: { level: 'pending' } },
     { label: 'ยังไม่มีรูป', n: active.filter((r) => !r.hasImage).length, to: { photo: 'none' } },
   ];

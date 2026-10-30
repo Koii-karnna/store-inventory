@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useData } from '../state.jsx';
 import { go, LevelBadge, Badge, Thumb, Empty, toast, AsyncButton } from '../ui.jsx';
-import { needsOrder, fmtNum, fmtIsoDateThai, LEVELS } from '../lib/model.js';
+import { needsOrder, needsReview, fmtNum, fmtIsoDateThai, LEVELS } from '../lib/model.js';
 import ItemDrawer from './ItemDrawer.jsx';
 import { getImage } from '../lib/db.js';
 import { useUsageStats } from '../lib/usageStore.js';
@@ -71,7 +71,7 @@ export default function Items({ params, alerts }) {
       if (p.photo === 'has' && !r.hasImage) return false;
       if (p.level === 'need' && !needsOrder(r.lv, r)) return false;
       if (p.level === 'ordering' && !r.ordering) return false;
-      if (p.level === 'review' && !r.review) return false;
+      if (p.level === 'review' && !needsReview(r)) return false;
       if (p.level && !['need', 'ordering', 'review'].includes(p.level) && r.lv !== p.level) return false;
       if (q && ![r.code, r.v.name, r.g?.name, r.m?.name, r.brand].some((s) => s && s.toLowerCase().includes(q))) return false;
       return true;
@@ -123,7 +123,7 @@ export default function Items({ params, alerts }) {
         vendor: main ? vendorName(main.id) : '', vendorsOther: vs.filter((v) => v !== main).map((v) => vendorName(v.id)).join(', '),
         lastInDate: fmtIsoDateThai(r.lastInDate), lastInQty: r.lastInQty ?? null, note: r.note || '',
         genediaName: r.g?.name && r.g.name !== r.v.name ? r.g.name : '',
-        flags: [r.inGenedia === false && 'ไม่มีใน Genedia', settings.preferMaster && !r.m && 'ไม่มีใน Master', r.review && 'รอตรวจ Group'].filter(Boolean).join(', '),
+        flags: [r.inGenedia === false && 'ไม่มีใน Genedia', settings.preferMaster && !r.m && 'ไม่มีใน Master', needsReview(r) && 'รอตรวจ Group'].filter(Boolean).join(', '),
         itemId: r.id, thumb: r.thumb,
       };
     });
@@ -256,7 +256,7 @@ export default function Items({ params, alerts }) {
                       <LevelBadge level={r.lv} />
                       {r.ordering && <Badge color="blue">กำลังสั่ง</Badge>}
                       {inDraft.has(r.id) && <Badge color="blue-soft">ในใบร่าง</Badge>}
-                      {r.review && <Badge color="orange-soft">รอตรวจ Group</Badge>}
+                      {needsReview(r) && <Badge color="orange-soft">รอตรวจ Group</Badge>}
                     </div>
                   </td>
                 </tr>

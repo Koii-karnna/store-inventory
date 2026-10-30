@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { useData } from '../state.jsx';
 import { Drawer, LevelBadge, Badge, AsyncButton, toast } from '../ui.jsx';
-import { fmtNum, fmtDateTime, mismatches, MISMATCH_TYPES } from '../lib/model.js';
+import { fmtNum, fmtDateTime, mismatches, needsReview, MISMATCH_TYPES } from '../lib/model.js';
 import { updateItem, commit, getImage, itemHistory, describeChange, ACTIONS } from '../lib/db.js';
 import { processImage } from '../lib/image.js';
 import UsageSection from './UsageSection.jsx';
@@ -106,7 +106,7 @@ export default function ItemDrawer({ item, onClose }) {
           <div className="badges">
             <LevelBadge level={item.lv} />
             {item.ordering && <Badge color="blue">กำลังสั่ง ตั้งแต่ {fmtDateTime(item.ordering.at)}</Badge>}
-            {item.review && <Badge color="orange-soft">รอตรวจ Group</Badge>}
+            {needsReview(item) && <Badge color="orange-soft">รอตรวจ Group</Badge>}
           </div>
           {item.ordering && isAdmin && <AsyncButton className="btn btn-sm btn-ghost" onClick={clearOrdering}>ยกเลิกป้ายกำลังสั่ง</AsyncButton>}
         </div>
