@@ -16,7 +16,8 @@ export const itemId = (building, code) => `${building}_${code}`;
  * - ชื่อ/หน่วย: ช่วงเปลี่ยนผ่านแสดงตาม Master (ตั้งค่าได้) ไม่งั้นตาม Genedia
  * - สถานะ: ยกเลิกที่ใดที่หนึ่ง (Genedia หรือ Master) = ยกเลิก ไม่แจ้งเตือนและไม่ให้สั่งซื้อ
  * - คงเหลือ/Min/Max/ราคา: ตาม Genedia เสมอ
- * - Group/หมวดย่อย/ยี่ห้อ: เก็บในเว็บ
+ * - Group/หมวดย่อย: ตาม Genedia (นำเข้าทับทุกครั้ง) · แก้ในเว็บได้เฉพาะรหัสที่ยังไม่มี Group ใน Genedia
+ * - ยี่ห้อ: เก็บในเว็บ
  */
 export function view(item, settings = DEFAULT_SETTINGS) {
   const g = item.g, m = item.m;

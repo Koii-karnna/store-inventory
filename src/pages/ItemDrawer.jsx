@@ -34,21 +34,24 @@ export default function ItemDrawer({ item, onClose }) {
   // ปิดช่วงเปลี่ยนผ่านแล้ว (Genedia เป็นข้อมูลหลัก) → ไม่ต้องเทียบกับ Master
   const mm = settings.preferMaster ? mismatches(item) : [];
   const webItem = item.m?.source === 'web';
+  // Group/หมวดย่อย มาจาก Genedia (นำเข้าทับทุกครั้ง) → แก้ในเว็บได้เฉพาะรหัสที่ Genedia ยังไม่มี Group ที่รู้จัก
+  const groupLocked = !!item.g?.group && !!taxonomy?.groups?.[item.building]?.includes(item.g.group);
   const f = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }));
 
   const save = async () => {
     const brand = form.brand.trim().toUpperCase() || null;
     const lastInQty = form.lastInQty === '' ? null : Number(form.lastInQty);
     if (lastInQty !== null && !(lastInQty >= 0)) throw new Error('จำนวนที่รับเข้าล่าสุดต้องเป็นตัวเลข');
-    const patch = {
-      group: form.group || null, sub: item.building === 'CMC' ? form.sub || null : null, brand, note: form.note.trim(), vendors: form.vendors,
-      lastInDate: form.lastInDate || null, lastInQty,
-    };
-    if (patch.group && item.review) patch.review = false;
+    const patch = { brand, note: form.note.trim(), vendors: form.vendors, lastInDate: form.lastInDate || null, lastInQty };
+    if (!groupLocked) {
+      patch.group = form.group || null;
+      patch.sub = item.building === 'CMC' ? form.sub || null : null;
+      if (patch.group && item.review) patch.review = false;
+    }
     // รายการที่ออกรหัสในเว็บ: แก้ชื่อ/หน่วยมาตรฐานได้ (Group/ยี่ห้อ ให้ตรงกันด้วย)
     if (webItem) {
       if (!form.mName.trim() || !form.mUnit.trim()) throw new Error('ชื่อและหน่วยนับห้ามว่าง');
-      const m = { ...item.m, name: form.mName.trim().replace(/\s+/g, ' '), unit: form.mUnit.trim(), group: patch.group, brand };
+      const m = { ...item.m, name: form.mName.trim().replace(/\s+/g, ' '), unit: form.mUnit.trim(), group: patch.group ?? item.group ?? null, brand };
       if (JSON.stringify(m) !== JSON.stringify(item.m)) patch.m = m;
     }
     const changed = await updateItem(user, item, patch);
@@ -142,15 +145,15 @@ export default function ItemDrawer({ item, onClose }) {
             <label>ชื่อมาตรฐาน (ออกรหัสในเว็บ){item.pending && ' — แก้ก่อนเพิ่มใน Genedia'}<input value={form.mName} onChange={f('mName')} disabled={!isAdmin} /></label>
             <label>หน่วยนับ<input value={form.mUnit} onChange={f('mUnit')} disabled={!isAdmin} /></label>
           </>}
-          <label>Group
-            <select value={form.group} onChange={(e) => setForm((x) => ({ ...x, group: e.target.value, sub: '' }))} disabled={!isAdmin}>
+          <label>Group{groupLocked && <small className="muted"> (ตาม Genedia — แก้ใน Genedia แล้วนำเข้าใหม่)</small>}
+            <select value={form.group} onChange={(e) => setForm((x) => ({ ...x, group: e.target.value, sub: '' }))} disabled={!isAdmin || groupLocked}>
               <option value="">– ไม่ระบุ –</option>
               {groups.map((g) => <option key={g}>{g}</option>)}
             </select>
           </label>
           {item.building === 'CMC' && (
-            <label>หมวดย่อย
-              <select value={form.sub} onChange={f('sub')} disabled={!isAdmin}>
+            <label>หมวดย่อย{groupLocked && <small className="muted"> (ตามรหัส)</small>}
+              <select value={form.sub} onChange={f('sub')} disabled={!isAdmin || groupLocked}>
                 <option value="">– ไม่ระบุ –</option>
                 {subs.map((s) => <option key={s.code} value={s.code}>{s.code} {s.name}</option>)}
               </select>

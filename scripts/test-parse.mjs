@@ -18,7 +18,7 @@ const assert = (cond, msg) => { if (!cond) { console.error('FAIL:', msg); proces
 const plan = planImport([], files, null);
 console.log('summary', plan.summary);
 const items = plan.creates.map((c) => c.data);
-assert(items.filter((i) => i.building === 'CMC').length === 510, 'CMC = 510 รายการ (506 Master + 4 นอก Master)');
+assert(items.filter((i) => i.building === 'CMC').length === 506, 'CMC = 506 รายการ (Genedia ตรงกับ Master แล้ว 2026-10-30)');
 assert(items.filter((i) => i.building === 'NP').length === 391, 'NP = 391 รายการ (390 Genedia + 1 เฉพาะ Master)');
 assert(plan.taxonomy.subs.length > 45, `หมวดย่อย CMC ${plan.taxonomy.subs.length}`);
 assert(plan.taxonomy.npCodes.length >= 17, `รหัส GG ของ NP ${plan.taxonomy.npCodes.length}`);
@@ -62,3 +62,11 @@ assert(reMaster.taxonomy.subs.some((s) => s.code === '01-012'), 'นำเข้
 const withNew = { ...store, items: [...store.items, { code: '01-002-39-1126', name: 'หลอด LED ทดสอบ L&E', active: true, stock: 0, min: 2, max: 5, cost: 0, price: 50 }] };
 const arrived = planImport([...items, webItem], [withNew], plan.taxonomy).updates.find((x) => x.id === webItem.id);
 assert(arrived && arrived.patch.pending === null && arrived.patch.inGenedia === true && !arrived.patch.review, 'รหัสที่จองไว้มีใน Genedia แล้ว → pending หาย');
+
+// Genedia เป็นข้อมูลหลัก: Group/หมวดย่อยที่แก้ในเว็บ ถูกนำเข้าทับกลับเป็นค่า Genedia (ไม่ต้องมี Master)
+assert(files.filter((f) => f.kind === 'report').length === 2 && items.every((i) => !i.g || i.g.group), 'อ่าน Part List Report ทั้ง CMC และ NP');
+const np = items.find((i) => i.building === 'NP' && i.g?.group);
+const drifted = items.map((i) => (i.id === a.id ? { ...i, group: 'CMC-AV', sub: '05-001' } : i.id === np.id ? { ...i, group: 'NP-AV' === np.group ? 'NP-LIFT' : 'NP-AV' } : i));
+const synced = planImport(drifted, files.filter((f) => f.kind !== 'master'), plan.taxonomy);
+const ua = synced.updates.find((x) => x.id === a.id), un = synced.updates.find((x) => x.id === np.id);
+assert(synced.updates.length === 2 && ua.patch.group === 'CMC-LIGHTING' && ua.patch.sub === '01-001' && un.patch.group === np.group, 'นำเข้าใหม่ทับ Group/หมวดย่อยที่แก้ในเว็บกลับเป็นตาม Genedia');

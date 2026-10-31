@@ -1,5 +1,5 @@
 // คำนวณว่าการนำเข้าไฟล์จะเปลี่ยนอะไรบ้าง (ยังไม่เขียนลงฐานข้อมูล)
-import { itemId, buildReportGroupMap, guessGroup } from './model.js';
+import { itemId, buildReportGroupMap, guessGroup, subFromCode } from './model.js';
 
 export const FIELD_LABELS = {
   'g.name': 'ชื่อ (Genedia)', 'g.active': 'สถานะ (Genedia)', 'g.unit': 'หน่วย (Genedia)', 'g.group': 'Group (Genedia)',
@@ -27,7 +27,7 @@ export function planImport(existing, files, taxonomy, opts = {}) {
   const before = new Map(existing.map((it) => [it.id, it]));
   const next = new Map(existing.map((it) => [it.id, structuredClone({ ...it })]));
   const master = files.find((f) => f.kind === 'master');
-  const report = files.find((f) => f.kind === 'report');
+  const reports = files.filter((f) => f.kind === 'report');
   const stores = files.filter((f) => f.kind === 'store' && f.building);
   const tax = master ? master.taxonomy : taxonomy;
 
@@ -53,14 +53,22 @@ export function planImport(existing, files, taxonomy, opts = {}) {
     for (const it of next.values()) if (it.m && it.m.source !== 'web' && !seen.has(it.id)) it.m = null;
   }
 
-  // 2) Part List Report: หน่วยนับ + Group ใน Genedia
-  const rep = new Map((report?.items || []).map((r) => [itemId(r.building, r.code), r]));
+  // 2) Part List Report: หน่วยนับ + Group ใน Genedia (CMC กับ NP เป็นคนละไฟล์ อาจนำเข้าพร้อมกัน)
+  const rep = new Map(reports.flatMap((f) => f.items).map((r) => [itemId(r.building, r.code), r]));
 
   // 3) Store Part List: คงเหลือ/Min/Max/ราคา/ชื่อ/สถานะ
   const reportMap = buildReportGroupMap([...next.values()].map((it) => {
     const r = rep.get(it.id);
     return r ? { ...it, g: { ...(it.g || {}), group: r.group } } : it;
   }));
+  // Genedia เป็นข้อมูลหลัก: Group ตาม Part List Report, หมวดย่อย CMC ตามรหัส (แก้ในเว็บไม่ได้)
+  const syncGroup = (it, reportGroup) => {
+    const group = tax?.groups?.[it.building]?.includes(reportGroup) ? reportGroup : reportMap[`${it.building}|${reportGroup}`];
+    if (!group) return; // ชื่อ Group ใน Genedia ไม่รู้จัก → คงค่าเดิมไว้ให้ตรวจ
+    it.group = group;
+    if (it.building === 'CMC') it.sub = subFromCode(it.building, it.code) || it.sub;
+    it.review = false;
+  };
   const storeBuildings = new Set();
   for (const f of stores) {
     storeBuildings.add(f.building);
@@ -81,6 +89,7 @@ export function planImport(existing, files, taxonomy, opts = {}) {
         unit: rp ? rp.unit : old.unit ?? null,
         group: rp ? rp.group : old.group ?? null,
       };
+      if (rp) syncGroup(it, rp.group);
       it.inGenedia = true;
       it.pending = null; // รหัสที่จองไว้ถูกเพิ่มใน Genedia แล้ว
       // ของเข้าแล้ว (คงเหลือเพิ่มขึ้นจากตอนสั่ง) → ปลดป้าย "กำลังสั่ง"
@@ -94,7 +103,7 @@ export function planImport(existing, files, taxonomy, opts = {}) {
   for (const [id, r] of rep) {
     if (storeBuildings.has(r.building)) continue;
     const it = next.get(id);
-    if (it?.g) it.g = { ...it.g, unit: r.unit, group: r.group };
+    if (it?.g) { it.g = { ...it.g, unit: r.unit, group: r.group }; syncGroup(it, r.group); }
   }
 
   // 4) เทียบก่อน/หลัง
