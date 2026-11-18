@@ -138,7 +138,7 @@ export default function Review({ params }) {
       <p className="muted small">
         {tab === 'minmax' && <>ค่าเสนอคำนวณจากการเบิก {USAGE_RULES.windowMonths} เดือนล่าสุด ({fmtMonthThai(result.windowFrom)} – {fmtMonthThai(result.endMonth)}) · ระยะรอของ {USAGE_RULES.leadMonths} เดือน · เป็นค่าเสนอให้ช่างทบทวนเท่านั้น</>}
         {tab === 'dead' && <>Dead Stock Candidate = ใช้งาน + มีของ + ไม่ถูกเบิกเลยตั้งแต่ ม.ค. 2023 — เป็นรายการให้ตรวจสอบ ไม่ใช่คำสั่งเลิกใช้</>}
-        {tab === 'inactive' && <>สถานะยกเลิก (ใน Genedia หรือ Master) แต่ยังมีของคงเหลือ — ให้ตรวจสอบก่อนจัดการยอดคงเหลือ</>}
+        {tab === 'inactive' && <>สถานะยกเลิกใน Genedia แต่ยังมีของคงเหลือ — ให้ตรวจสอบก่อนจัดการยอดคงเหลือ</>}
       </p>
       <div className="filters">
         <input type="search" placeholder="ค้นหา รหัส / ชื่อ" value={q} onChange={(e) => setQ(e.target.value)} />
